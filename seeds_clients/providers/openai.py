@@ -199,16 +199,46 @@ class OpenAIClient(BaseClient):
             model: Pydantic model class.
 
         Returns:
-            JSON schema dict.
+            JSON schema dict with resolved references.
         """
         # Get Pydantic v2 JSON schema
         schema = model.model_json_schema()
 
-        # Remove $defs and inline them (OpenAI prefers flat schemas)
+        # Resolve $ref references by inlining $defs
         if "$defs" in schema:
-            # For now, just remove $defs - full ref resolution can be added later
-            schema.pop("$defs", None)
+            defs = schema.pop("$defs")
+            schema = self._resolve_refs(schema, defs)
 
+        return schema
+
+    def _resolve_refs(self, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+        """
+        Recursively resolve $ref references in a schema.
+
+        Args:
+            schema: Schema dict that may contain $ref references.
+            defs: Definitions dict to resolve references from.
+
+        Returns:
+            Schema with all references resolved.
+        """
+        if isinstance(schema, dict):
+            if "$ref" in schema:
+                # Extract definition name from #/$defs/Name format
+                ref_path = schema["$ref"].split("/")
+                if len(ref_path) == 3 and ref_path[0] == "#" and ref_path[1] == "$defs":
+                    def_name = ref_path[2]
+                    if def_name in defs:
+                        # Replace reference with actual definition
+                        resolved = defs[def_name].copy()
+                        # Recursively resolve any nested refs
+                        return self._resolve_refs(resolved, defs)
+                return schema
+            else:
+                # Recursively process all values
+                return {k: self._resolve_refs(v, defs) for k, v in schema.items()}
+        elif isinstance(schema, list):
+            return [self._resolve_refs(item, defs) for item in schema]
         return schema
 
     def __del__(self) -> None:

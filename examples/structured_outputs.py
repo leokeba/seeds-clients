@@ -2,14 +2,21 @@
 
 import os
 
-from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from pydantic import BaseModel, ConfigDict, Field
 
 from seeds_clients import Message, OpenAIClient
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 # Define your output structure
 class PersonInfo(BaseModel):
     """Structured person information."""
+    
+    model_config = ConfigDict(extra="forbid")
+    
     name: str = Field(description="Full name of the person")
     age: int = Field(description="Age in years", ge=0, le=150)
     occupation: str = Field(description="Current occupation")
@@ -18,6 +25,9 @@ class PersonInfo(BaseModel):
 
 class ProductReview(BaseModel):
     """Structured product review."""
+    
+    model_config = ConfigDict(extra="forbid")
+    
     product_name: str
     rating: int = Field(ge=1, le=5, description="Rating from 1-5 stars")
     pros: list[str] = Field(description="List of positive aspects")
@@ -65,12 +75,16 @@ def example_complex_nested_structure() -> None:
     """Extract complex nested data structures."""
 
     class Address(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        
         street: str
         city: str
         country: str
         postal_code: str
 
     class Company(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        
         name: str
         industry: str
         founded_year: int

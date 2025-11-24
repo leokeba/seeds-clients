@@ -2,7 +2,12 @@
 
 import os
 
+from dotenv import load_dotenv
+
 from seeds_clients import Message, OpenAIClient
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize the client
 client = OpenAIClient(
@@ -54,18 +59,20 @@ print(f"Model: {response.model}")
 print()
 
 # Example 4: Multimodal (image + text)
-print("Example 4: Multimodal input")
-print("-" * 50)
-response = client.generate(
-    messages=[
-        Message(
-            role="user",
-            content=[
-                {"type": "text", "text": "What's in this image?"},
-                {"type": "image", "source": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/200px-Python-logo-notext.svg.png"},
-            ],
-        ),
-    ]
-)
-print(f"Response: {response.content}")
+# Note: Commented out as it requires a valid image URL accessible by OpenAI
+# print("Example 4: Multimodal input")
+# print("-" * 50)
+# response = client.generate(
+#     messages=[
+#         Message(
+#             role="user",
+#             content=[
+#                 {"type": "text", "text": "What's in this image?"},
+#                 {"type": "image", "source": "https://example.com/image.png"},
+#             ],
+#         ),
+#     ]
+# )
+# print(f"Response: {response.content}")
+print("\n✅ All examples completed successfully!")
 print()
