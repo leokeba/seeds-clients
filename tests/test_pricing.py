@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from seeds_clients.providers.pricing import (
+from seeds_clients.utils.pricing import (
     OPENAI_PRICING,
     calculate_cost,
     check_pricing_update_needed,
@@ -178,7 +178,7 @@ class TestPricingDataManagement:
     def test_pricing_file_structure(self) -> None:
         """Test that pricing file has correct structure."""
         # Should have openai provider
-        from seeds_clients.providers.pricing import _PRICING_DATA
+        from seeds_clients.utils.pricing import _PRICING_DATA
 
         assert "openai" in _PRICING_DATA
         assert isinstance(_PRICING_DATA["openai"], dict)

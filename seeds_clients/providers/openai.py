@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from contextlib import suppress
 from typing import Any
 
@@ -12,18 +13,19 @@ from pydantic import BaseModel
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError, ValidationError
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
-from seeds_clients.providers.pricing import calculate_cost
+from seeds_clients.tracking.ecologits_tracker import EcoLogitsMixin
+from seeds_clients.utils.pricing import calculate_cost
 
 
-class OpenAIClient(BaseClient):
+class OpenAIClient(EcoLogitsMixin, BaseClient):
     """
-    OpenAI client implementation.
+    OpenAI client implementation with carbon tracking.
 
     Supports:
     - Chat completions (text and multimodal)
     - Structured outputs with response_format
     - Image inputs (URLs, file paths, PIL Images, base64)
-    - Cost tracking and carbon impact measurement
+    - Cost tracking and carbon impact measurement via EcoLogits
 
     Example:
         ```python
@@ -104,6 +106,10 @@ class OpenAIClient(BaseClient):
 
     def _get_provider_name(self) -> str:
         """Return provider name for tracking."""
+        return "openai"
+
+    def _get_ecologits_provider(self) -> str:
+        """Return provider name for EcoLogits tracking."""
         return "openai"
 
     def _setup_tracking(self) -> None:
@@ -211,7 +217,7 @@ class OpenAIClient(BaseClient):
 
         return schema
 
-    def _resolve_refs(self, schema: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_refs(self, schema: dict[str, Any] | list[Any] | Any, defs: dict[str, Any]) -> Any:
         """
         Recursively resolve $ref references in a schema.
 
@@ -279,6 +285,9 @@ class OpenAIClient(BaseClient):
         # Override with kwargs
         payload.update(kwargs)
 
+        # Track start time for duration
+        start_time = time.time()
+
         try:
             response = self._http_client.post(
                 "/chat/completions",
@@ -286,6 +295,24 @@ class OpenAIClient(BaseClient):
             )
             response.raise_for_status()
             result: dict[str, Any] = response.json()
+            
+            # Calculate request duration
+            duration_seconds = time.time() - start_time
+            result["_duration_seconds"] = duration_seconds
+            
+            # Calculate EcoLogits carbon impacts
+            usage = result.get("usage", {})
+            output_tokens = usage.get("completion_tokens", 0)
+            model_name = result.get("model", self.model)
+            
+            impacts = self._calculate_ecologits_impacts(
+                model_name=model_name,
+                output_tokens=output_tokens,
+                request_latency=duration_seconds,
+            )
+            if impacts:
+                result["_ecologits_impacts"] = impacts
+            
             return result
 
         except httpx.HTTPStatusError as e:
@@ -346,18 +373,25 @@ class OpenAIClient(BaseClient):
                     completion_tokens=usage.completion_tokens,
                 )
 
-            # Create tracking data with cost
-            # Note: energy_kwh and gwp_kgco2eq are set to 0 until EcoLogits integration
+            # Extract EcoLogits carbon impact data
+            ecologits_impacts = raw.get("_ecologits_impacts")
+            duration_seconds = raw.get("_duration_seconds", 0.0)
+            
+            energy_kwh, gwp_kgco2eq, tracking_method = self._extract_ecologits_metrics(
+                ecologits_impacts
+            )
+
+            # Create tracking data with cost and carbon metrics
             tracking = TrackingData(
-                energy_kwh=0.0,
-                gwp_kgco2eq=0.0,
+                energy_kwh=energy_kwh,
+                gwp_kgco2eq=gwp_kgco2eq,
                 cost_usd=cost_usd,
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
                 provider="openai",
                 model=model_name,
-                tracking_method="none",
-                duration_seconds=0.0,  # Will be set by base client if timing is enabled
+                tracking_method=tracking_method,
+                duration_seconds=duration_seconds,
             )
 
             # Extract optional fields
