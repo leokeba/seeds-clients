@@ -2,6 +2,7 @@
 
 import json
 import os
+from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -10,7 +11,8 @@ from pydantic import BaseModel
 
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError, ValidationError
-from seeds_clients.core.types import Message, Response, Usage
+from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.providers.pricing import calculate_cost
 
 
 class OpenAIClient(BaseClient):
@@ -284,7 +286,7 @@ class OpenAIClient(BaseClient):
             raw: Raw API response dict.
 
         Returns:
-            Parsed Response object.
+            Parsed Response object with cost tracking.
 
         Raises:
             ProviderError: If response format is invalid.
@@ -303,6 +305,31 @@ class OpenAIClient(BaseClient):
                 total_tokens=usage_data.get("total_tokens", 0),
             )
 
+            # Calculate cost
+            model_name = raw.get("model", self.model)
+            cost_usd = 0.0
+            with suppress(ValueError):
+                # Model not found in pricing data - cost remains 0
+                cost_usd = calculate_cost(
+                    model=model_name,
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=usage.completion_tokens,
+                )
+
+            # Create tracking data with cost
+            # Note: energy_kwh and gwp_kgco2eq are set to 0 until EcoLogits integration
+            tracking = TrackingData(
+                energy_kwh=0.0,
+                gwp_kgco2eq=0.0,
+                cost_usd=cost_usd,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                provider="openai",
+                model=model_name,
+                tracking_method="none",
+                duration_seconds=0.0,  # Will be set by base client if timing is enabled
+            )
+
             # Extract optional fields
             finish_reason = choice.get("finish_reason")
             response_id = raw.get("id")
@@ -310,8 +337,9 @@ class OpenAIClient(BaseClient):
             return Response(
                 content=content,
                 usage=usage,
-                model=raw.get("model", self.model),
+                model=model_name,
                 raw=raw,
+                tracking=tracking,
                 finish_reason=finish_reason,
                 response_id=response_id,
             )

@@ -3,6 +3,7 @@
 import json
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -709,4 +710,154 @@ class TestOpenAIStructuredOutputs:
         assert "active" in schema["properties"]
         assert "required" in schema
         assert set(schema["required"]) == {"name", "count", "active"}
+
+
+class TestOpenAICostTracking:
+    """Tests for cost tracking in OpenAI client."""
+
+    @pytest.fixture
+    def client(self) -> Generator[OpenAIClient, None, None]:
+        """Create test client."""
+        import shutil
+        import tempfile
+
+        cache_dir = tempfile.mkdtemp(prefix="test_cache_")
+        client = OpenAIClient(api_key="test-key", cache_dir=cache_dir)
+
+        yield client
+
+        if client.cache:
+            client.cache.close()
+        shutil.rmtree(cache_dir, ignore_errors=True)
+
+    def test_cost_tracking_enabled(self, client: OpenAIClient) -> None:
+        """Test that cost tracking is automatically enabled."""
+        mock_response = {
+            "id": "chatcmpl-cost",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "gpt-4o",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Test response"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 500,
+                "total_tokens": 1500,
+            },
+        }
+
+        with patch.object(client._http_client, "post") as mock_post:
+            mock_post.return_value = Mock(
+                json=Mock(return_value=mock_response),
+                raise_for_status=Mock(),
+            )
+
+            messages = [Message(role="user", content="Test")]
+            response = client.generate(messages)
+
+            # Check tracking data is present
+            assert response.tracking is not None
+            assert response.tracking.cost_usd > 0
+            assert response.tracking.prompt_tokens == 1000
+            assert response.tracking.completion_tokens == 500
+            assert response.tracking.provider == "openai"
+            assert response.tracking.model == "gpt-4o"
+
+            # Check cost calculation
+            # GPT-4o: $2.50 per 1M input, $10.00 per 1M output
+            # (1000/1M * 2.50) + (500/1M * 10.00) = 0.0025 + 0.005 = 0.0075
+            assert response.tracking.cost_usd == pytest.approx(0.0075)
+
+    def test_cost_tracking_different_models(self, client: OpenAIClient) -> None:
+        """Test cost tracking with different models."""
+        test_cases: list[dict[str, Any]] = [
+            {
+                "model": "gpt-4o-mini",
+                "prompt_tokens": 10000,
+                "completion_tokens": 5000,
+                "expected_cost": 0.0045,  # (10000/1M * 0.150) + (5000/1M * 0.600)
+            },
+            {
+                "model": "gpt-3.5-turbo",
+                "prompt_tokens": 100000,
+                "completion_tokens": 50000,
+                "expected_cost": 0.125,  # (100000/1M * 0.50) + (50000/1M * 1.50)
+            },
+        ]
+
+        for test_case in test_cases:
+            prompt_tokens = int(test_case["prompt_tokens"])
+            completion_tokens = int(test_case["completion_tokens"])
+
+            with patch.object(client._http_client, "post") as mock_post:
+                mock_response = {
+                    "id": "chatcmpl-test",
+                    "object": "chat.completion",
+                    "created": 1234567890,
+                    "model": test_case["model"],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "Test"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": prompt_tokens + completion_tokens,
+                    },
+                }
+
+                mock_post.return_value = Mock(
+                    json=Mock(return_value=mock_response),
+                    raise_for_status=Mock(),
+                )
+
+                messages = [Message(role="user", content="Test")]
+                response = client.generate(messages, use_cache=False)
+
+                assert response.tracking is not None
+                assert response.tracking.cost_usd == pytest.approx(test_case["expected_cost"])
+
+    def test_cost_tracking_unknown_model(self, client: OpenAIClient) -> None:
+        """Test cost tracking with unknown model falls back to zero cost."""
+        mock_response = {
+            "id": "chatcmpl-unknown",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "unknown-model-xyz",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Test"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 500,
+                "total_tokens": 1500,
+            },
+        }
+
+        with patch.object(client._http_client, "post") as mock_post:
+            mock_post.return_value = Mock(
+                json=Mock(return_value=mock_response),
+                raise_for_status=Mock(),
+            )
+
+            messages = [Message(role="user", content="Test")]
+            response = client.generate(messages)
+
+            # Should still have tracking data but with zero cost
+            assert response.tracking is not None
+            assert response.tracking.cost_usd == 0.0
+            assert response.tracking.prompt_tokens == 1000
+            assert response.tracking.completion_tokens == 500
 

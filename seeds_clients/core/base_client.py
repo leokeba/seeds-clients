@@ -134,14 +134,14 @@ class BaseClient(ABC):
         raw_response = self._call_api(messages, **kwargs)
         duration = time.time() - start_time
 
-        # Add tracking if enabled
-        tracking_data = None
-        if self.enable_tracking and self.tracker:
-            tracking_data = self._track_request(raw_response, duration)
-
         # Parse response
         response = self._parse_response(raw_response)
-        response.tracking = tracking_data
+
+        # Add tracking if enabled (only if not already set by provider)
+        if response.tracking is None and self.enable_tracking and self.tracker:
+            tracking_data = self._track_request(raw_response, duration)
+            response.tracking = tracking_data
+
         response.cached = False
 
         # Cache the raw response
