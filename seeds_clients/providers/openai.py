@@ -295,16 +295,16 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             )
             response.raise_for_status()
             result: dict[str, Any] = response.json()
-            
+
             # Calculate request duration
             duration_seconds = time.time() - start_time
             result["_duration_seconds"] = duration_seconds
-            
+
             # Calculate EcoLogits carbon impacts
             usage = result.get("usage", {})
             output_tokens = usage.get("completion_tokens", 0)
             model_name = result.get("model", self.model)
-            
+
             impacts = self._calculate_ecologits_impacts(
                 model_name=model_name,
                 output_tokens=output_tokens,
@@ -312,7 +312,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             )
             if impacts:
                 result["_ecologits_impacts"] = impacts
-            
+
             return result
 
         except httpx.HTTPStatusError as e:
@@ -376,7 +376,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             # Extract EcoLogits carbon impact data
             ecologits_impacts = raw.get("_ecologits_impacts")
             duration_seconds = raw.get("_duration_seconds", 0.0)
-            
+
             energy_kwh, gwp_kgco2eq, tracking_method = self._extract_ecologits_metrics(
                 ecologits_impacts
             )
