@@ -81,6 +81,10 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
 ]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

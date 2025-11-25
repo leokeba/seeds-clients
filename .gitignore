@@ -53,6 +53,7 @@ cache/
 .env
 .env.local
 old/
+reports/
 
 # Distribution / packaging
 *.whl
