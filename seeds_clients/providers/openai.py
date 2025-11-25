@@ -430,14 +430,17 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         """
         Convert Pydantic model to JSON schema for OpenAI API.
 
-        OpenAI's structured outputs require `additionalProperties: false` on all
-        object types. This method automatically adds that constraint.
+        OpenAI's structured outputs (strict mode) require:
+        1. `additionalProperties: false` on all object types
+        2. `required` array must include ALL property keys
+
+        This method automatically patches the schema to meet these requirements.
 
         Args:
             model: Pydantic model class.
 
         Returns:
-            JSON schema dict with resolved references and additionalProperties set.
+            JSON schema dict with resolved references and OpenAI compatibility patches.
         """
         # Get Pydantic v2 JSON schema
         schema = model.model_json_schema()
@@ -447,22 +450,24 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             defs = schema.pop("$defs")
             schema = self._resolve_refs(schema, defs)
 
-        # Add additionalProperties: false to all object types (required by OpenAI)
-        schema = self._add_additional_properties_false(schema)
+        # Apply OpenAI strict mode patches
+        schema = self._patch_schema_for_openai_strict(schema)
 
         return schema
 
-    def _add_additional_properties_false(self, schema: dict[str, Any] | list[Any] | Any) -> Any:
+    def _patch_schema_for_openai_strict(self, schema: dict[str, Any] | list[Any] | Any) -> Any:
         """
-        Recursively add additionalProperties: false to all object types.
+        Recursively patch schema for OpenAI strict mode compatibility.
 
-        OpenAI's structured outputs API requires this constraint on all objects.
+        OpenAI's structured outputs API requires:
+        1. additionalProperties: false on all objects
+        2. required array must list ALL properties (not just non-optional ones)
 
         Args:
             schema: Schema dict or value to process.
 
         Returns:
-            Schema with additionalProperties: false added to all object types.
+            Schema patched for OpenAI strict mode.
         """
         if isinstance(schema, dict):
             # Check if this is an object type (has "properties" or "type": "object")
@@ -471,16 +476,23 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
                 "properties" in schema
             )
 
-            if is_object and "additionalProperties" not in schema:
-                schema["additionalProperties"] = False
+            if is_object:
+                # Patch 1: Add additionalProperties: false
+                if "additionalProperties" not in schema:
+                    schema["additionalProperties"] = False
+
+                # Patch 2: Ensure required includes ALL property keys
+                if "properties" in schema:
+                    all_props = list(schema["properties"].keys())
+                    schema["required"] = all_props
 
             # Recursively process all values
             for key, value in schema.items():
-                schema[key] = self._add_additional_properties_false(value)
+                schema[key] = self._patch_schema_for_openai_strict(value)
 
             return schema
         elif isinstance(schema, list):
-            return [self._add_additional_properties_false(item) for item in schema]
+            return [self._patch_schema_for_openai_strict(item) for item in schema]
         return schema
 
     def _resolve_refs(self, schema: dict[str, Any] | list[Any] | Any, defs: dict[str, Any]) -> Any:

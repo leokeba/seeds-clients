@@ -723,6 +723,20 @@ class TestOpenAIStructuredOutputs:
         # Top-level object should have additionalProperties: false
         assert schema.get("additionalProperties") is False
 
+    def test_json_schema_has_all_properties_required(self, client: OpenAIClient) -> None:
+        """Test that JSON schema includes ALL properties in required array."""
+
+        class ModelWithOptional(BaseModel):
+            name: str
+            age: int
+            nickname: str | None = None  # Optional field
+
+        schema = client._pydantic_to_json_schema(ModelWithOptional)
+
+        # OpenAI strict mode requires ALL properties in required, even optional ones
+        assert "required" in schema
+        assert set(schema["required"]) == {"name", "age", "nickname"}
+
     def test_json_schema_nested_objects_have_additional_properties_false(
         self, client: OpenAIClient
     ) -> None:
@@ -744,6 +758,30 @@ class TestOpenAIStructuredOutputs:
         # Nested Address object should also have additionalProperties: false
         address_schema = schema["properties"]["address"]
         assert address_schema.get("additionalProperties") is False
+
+    def test_json_schema_nested_objects_have_all_properties_required(
+        self, client: OpenAIClient
+    ) -> None:
+        """Test that nested objects have ALL properties in required."""
+
+        class LineItem(BaseModel):
+            description: str
+            quantity: int = 1  # Has default, but still should be required
+            price: float
+
+        class Invoice(BaseModel):
+            items: list[LineItem]
+            total: float
+
+        schema = client._pydantic_to_json_schema(Invoice)
+
+        # Check nested LineItem schema (inside array)
+        items_schema = schema["properties"]["items"]
+        line_item_schema = items_schema.get("items", {})
+
+        # ALL properties must be in required, even those with defaults
+        assert "required" in line_item_schema
+        assert set(line_item_schema["required"]) == {"description", "quantity", "price"}
 
     def test_json_schema_deeply_nested_has_additional_properties_false(
         self, client: OpenAIClient
