@@ -430,11 +430,14 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         """
         Convert Pydantic model to JSON schema for OpenAI API.
 
+        OpenAI's structured outputs require `additionalProperties: false` on all
+        object types. This method automatically adds that constraint.
+
         Args:
             model: Pydantic model class.
 
         Returns:
-            JSON schema dict with resolved references.
+            JSON schema dict with resolved references and additionalProperties set.
         """
         # Get Pydantic v2 JSON schema
         schema = model.model_json_schema()
@@ -444,6 +447,40 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             defs = schema.pop("$defs")
             schema = self._resolve_refs(schema, defs)
 
+        # Add additionalProperties: false to all object types (required by OpenAI)
+        schema = self._add_additional_properties_false(schema)
+
+        return schema
+
+    def _add_additional_properties_false(self, schema: dict[str, Any] | list[Any] | Any) -> Any:
+        """
+        Recursively add additionalProperties: false to all object types.
+
+        OpenAI's structured outputs API requires this constraint on all objects.
+
+        Args:
+            schema: Schema dict or value to process.
+
+        Returns:
+            Schema with additionalProperties: false added to all object types.
+        """
+        if isinstance(schema, dict):
+            # Check if this is an object type (has "properties" or "type": "object")
+            is_object = (
+                schema.get("type") == "object" or
+                "properties" in schema
+            )
+
+            if is_object and "additionalProperties" not in schema:
+                schema["additionalProperties"] = False
+
+            # Recursively process all values
+            for key, value in schema.items():
+                schema[key] = self._add_additional_properties_false(value)
+
+            return schema
+        elif isinstance(schema, list):
+            return [self._add_additional_properties_false(item) for item in schema]
         return schema
 
     def _resolve_refs(self, schema: dict[str, Any] | list[Any] | Any, defs: dict[str, Any]) -> Any:

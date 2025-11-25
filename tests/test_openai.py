@@ -711,6 +711,71 @@ class TestOpenAIStructuredOutputs:
         assert "required" in schema
         assert set(schema["required"]) == {"name", "count", "active"}
 
+    def test_json_schema_has_additional_properties_false(self, client: OpenAIClient) -> None:
+        """Test that JSON schema includes additionalProperties: false for OpenAI compatibility."""
+
+        class SimpleModel(BaseModel):
+            name: str
+            value: int
+
+        schema = client._pydantic_to_json_schema(SimpleModel)
+
+        # Top-level object should have additionalProperties: false
+        assert schema.get("additionalProperties") is False
+
+    def test_json_schema_nested_objects_have_additional_properties_false(
+        self, client: OpenAIClient
+    ) -> None:
+        """Test that nested objects also have additionalProperties: false."""
+
+        class Address(BaseModel):
+            street: str
+            city: str
+
+        class Person(BaseModel):
+            name: str
+            address: Address
+
+        schema = client._pydantic_to_json_schema(Person)
+
+        # Top-level should have additionalProperties: false
+        assert schema.get("additionalProperties") is False
+
+        # Nested Address object should also have additionalProperties: false
+        address_schema = schema["properties"]["address"]
+        assert address_schema.get("additionalProperties") is False
+
+    def test_json_schema_deeply_nested_has_additional_properties_false(
+        self, client: OpenAIClient
+    ) -> None:
+        """Test additionalProperties: false on deeply nested structures."""
+
+        class Item(BaseModel):
+            name: str
+            price: float
+
+        class Order(BaseModel):
+            items: list[Item]
+            total: float
+
+        class Invoice(BaseModel):
+            order: Order
+            customer_name: str
+
+        schema = client._pydantic_to_json_schema(Invoice)
+
+        # Top-level
+        assert schema.get("additionalProperties") is False
+
+        # Order
+        order_schema = schema["properties"]["order"]
+        assert order_schema.get("additionalProperties") is False
+
+        # Item (inside array)
+        items_schema = order_schema["properties"]["items"]
+        item_schema = items_schema.get("items", {})
+        assert item_schema.get("additionalProperties") is False
+
 
 class TestOpenAICostTracking:
     """Tests for cost tracking in OpenAI client."""
