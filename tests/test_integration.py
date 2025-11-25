@@ -57,7 +57,7 @@ class TestOpenAIIntegration:
         if not has_openai_key():
             pytest.skip("OPENAI_API_KEY not set")
         return OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache"),
             ttl_hours=1.0,
         )
@@ -144,7 +144,7 @@ class TestOpenAIIntegration:
 
         # World average
         client_wor = OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache1"),
             electricity_mix_zone="WOR",
         )
@@ -152,7 +152,7 @@ class TestOpenAIIntegration:
 
         # France (lower carbon due to nuclear)
         client_fra = OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache2"),
             electricity_mix_zone="FRA",
         )
@@ -202,7 +202,7 @@ class TestOpenAIAsyncIntegration:
         if not has_openai_key():
             pytest.skip("OPENAI_API_KEY not set")
         return OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache"),
         )
 
@@ -271,7 +271,7 @@ class TestOpenAIAsyncIntegration:
             pytest.skip("OPENAI_API_KEY not set")
 
         async with OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache"),
         ) as client:
             response = await client.agenerate(
@@ -295,7 +295,7 @@ class TestOpenRouterIntegration:
         if not has_openrouter_key():
             pytest.skip("OPENROUTER_API_KEY not set")
         return OpenRouterClient(
-            model="openai/gpt-4o-mini",
+            model="openai/gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache"),
             ttl_hours=1.0,
         )
@@ -325,13 +325,13 @@ class TestOpenRouterIntegration:
             pytest.skip("OPENROUTER_API_KEY not set")
 
         client = OpenRouterClient(
-            model="openai/gpt-4o-mini",
+            model="openai/gpt-4.1-mini",
             cache_dir=str(tmp_path / "cache"),
         )
 
         # Provider should be extracted for EcoLogits
         assert client._get_ecologits_provider() == "openai"
-        assert client._get_ecologits_model() == "gpt-4o-mini"
+        assert client._get_ecologits_model() == "gpt-4.1-mini"
 
     def test_different_providers(self, tmp_path: Path) -> None:
         """Test using different model providers through OpenRouter."""
@@ -340,7 +340,7 @@ class TestOpenRouterIntegration:
 
         # Test with multiple providers (if available on account)
         models_to_test = [
-            "openai/gpt-4o-mini",
+            "openai/gpt-4.1-mini",
             # "anthropic/claude-3-haiku-20240307",  # Uncomment if available
             # "google/gemini-flash-1.5",  # Uncomment if available
         ]
@@ -391,7 +391,7 @@ class TestCrossProviderIntegration:
 
         # Direct OpenAI
         openai_client = OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "openai_cache"),
         )
         openai_response = openai_client.generate(messages=messages)
@@ -399,7 +399,7 @@ class TestCrossProviderIntegration:
         # Via OpenRouter (if available)
         if has_openrouter_key():
             openrouter_client = OpenRouterClient(
-                model="openai/gpt-4o-mini",
+                model="openai/gpt-4.1-mini",
                 cache_dir=str(tmp_path / "openrouter_cache"),
             )
             openrouter_response = openrouter_client.generate(messages=messages)
@@ -430,7 +430,7 @@ class TestCrossProviderIntegration:
 
         # OpenAI
         openai_client = OpenAIClient(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             cache_dir=str(tmp_path / "openai_cache"),
         )
         openai_result = asyncio.run(run_batch(openai_client))
@@ -439,7 +439,7 @@ class TestCrossProviderIntegration:
         # OpenRouter (if available)
         if has_openrouter_key():
             openrouter_client = OpenRouterClient(
-                model="openai/gpt-4o-mini",
+                model="openai/gpt-4.1-mini",
                 cache_dir=str(tmp_path / "openrouter_cache"),
             )
             openrouter_result = asyncio.run(run_batch(openrouter_client))

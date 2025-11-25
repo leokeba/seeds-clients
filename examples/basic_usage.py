@@ -12,7 +12,7 @@ load_dotenv()
 # Initialize the client with carbon tracking
 client = OpenAIClient(
     api_key=os.getenv("OPENAI_API_KEY"),
-    model="gpt-4o",
+    model="gpt-4.1",
     cache_dir="cache",            # Enable caching
     ttl_hours=24.0,               # Cache for 24 hours
     electricity_mix_zone="WOR",   # World average electricity mix (default)
@@ -95,7 +95,7 @@ print("-" * 50)
 # Create client with French electricity mix (nuclear heavy = low carbon)
 client_fra = OpenAIClient(
     api_key=os.getenv("OPENAI_API_KEY"),
-    model="gpt-4o",
+    model="gpt-4.1",
     cache_dir="cache",
     electricity_mix_zone="FRA",  # France
 )

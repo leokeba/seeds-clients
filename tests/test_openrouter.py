@@ -17,9 +17,9 @@ class TestOpenRouterClientInit:
 
     def test_init_with_api_key(self) -> None:
         """Test initialization with explicit API key."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
         assert client.api_key == "test-key"
-        assert client.model == "openai/gpt-4o"
+        assert client.model == "openai/gpt-4.1"
         assert "openrouter.ai" in client.base_url
 
     def test_init_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,13 +41,13 @@ class TestOpenRouterClientInit:
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with pytest.raises(Exception):  # ConfigurationError
-            OpenRouterClient(model="openai/gpt-4o")
+            OpenRouterClient(model="openai/gpt-4.1")
 
     def test_init_with_custom_headers(self) -> None:
         """Test initialization with custom OpenRouter headers."""
         client = OpenRouterClient(
             api_key="test-key",
-            model="openai/gpt-4o",
+            model="openai/gpt-4.1",
             site_url="https://myapp.com",
             app_name="MyApp",
         )
@@ -56,7 +56,7 @@ class TestOpenRouterClientInit:
 
     def test_base_url_is_openrouter(self) -> None:
         """Test that base URL is OpenRouter's API."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
         assert client.base_url == "https://openrouter.ai/api/v1"
 
 
@@ -65,7 +65,7 @@ class TestEcoLogitsProvider:
 
     def test_ecologits_provider_for_openai(self) -> None:
         """Test EcoLogits provider is correctly extracted for OpenAI."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
         assert client._get_ecologits_provider() == "openai"
 
     def test_ecologits_provider_for_anthropic(self) -> None:
@@ -85,7 +85,7 @@ class TestEcoLogitsProvider:
 
     def test_ecologits_provider_without_slash(self) -> None:
         """Test EcoLogits provider for model without provider prefix."""
-        client = OpenRouterClient(api_key="test-key", model="gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="gpt-4.1")
         assert client._get_ecologits_provider() == "openrouter"
 
 
@@ -94,8 +94,8 @@ class TestEcoLogitsModel:
 
     def test_ecologits_model_extraction(self) -> None:
         """Test model name is correctly extracted."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
-        assert client._get_ecologits_model() == "gpt-4o"
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
+        assert client._get_ecologits_model() == "gpt-4.1"
 
     def test_ecologits_model_anthropic(self) -> None:
         """Test model extraction for Anthropic."""
@@ -104,8 +104,8 @@ class TestEcoLogitsModel:
 
     def test_ecologits_model_without_slash(self) -> None:
         """Test model extraction when no provider prefix."""
-        client = OpenRouterClient(api_key="test-key", model="gpt-4o")
-        assert client._get_ecologits_model() == "gpt-4o"
+        client = OpenRouterClient(api_key="test-key", model="gpt-4.1")
+        assert client._get_ecologits_model() == "gpt-4.1"
 
 
 class TestOpenRouterCostData:
@@ -116,7 +116,7 @@ class TestOpenRouterCostData:
         cost_data = OpenRouterCostData(
             generation_id="gen_123",
             total_cost=0.005,
-            model="openai/gpt-4o",
+            model="openai/gpt-4.1",
             prompt_tokens=100,
             completion_tokens=50,
         )
@@ -158,7 +158,7 @@ class TestOpenRouterGenerate:
         """Create a mock API response."""
         return {
             "id": "gen_abc123",
-            "model": "openai/gpt-4o",
+            "model": "openai/gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -175,7 +175,7 @@ class TestOpenRouterGenerate:
 
     def test_generate_returns_response(self, mock_response: dict) -> None:
         """Test that generate returns a valid Response."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
 
         mock = Mock(spec=httpx.Response)
         mock.status_code = 200
@@ -190,7 +190,7 @@ class TestOpenRouterGenerate:
 
     def test_generate_tracks_provider(self, mock_response: dict) -> None:
         """Test that generate tracks OpenRouter as provider."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
 
         mock = Mock(spec=httpx.Response)
         mock.status_code = 200
@@ -209,7 +209,7 @@ class TestOpenRouterCostFetching:
 
     def test_fetch_cost_data_success(self) -> None:
         """Test successfully fetching generation cost."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o", fetch_cost_data=True)
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1", fetch_cost_data=True)
 
         mock_cost_response = {
             "data": {
@@ -219,7 +219,7 @@ class TestOpenRouterCostFetching:
                 "tokens_completion": 50,
                 "native_tokens_prompt": 110,
                 "native_tokens_completion": 55,
-                "model": "openai/gpt-4o",
+                "model": "openai/gpt-4.1",
                 "provider_name": "OpenAI",
             }
         }
@@ -238,11 +238,11 @@ class TestOpenRouterCostFetching:
         assert cost_data.completion_tokens == 50
         assert cost_data.native_prompt_tokens == 110
         assert cost_data.native_completion_tokens == 55
-        assert cost_data.model == "openai/gpt-4o"
+        assert cost_data.model == "openai/gpt-4.1"
 
     def test_fetch_cost_data_handles_missing_data(self) -> None:
         """Test that cost fetching handles missing data gracefully."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
 
         mock = Mock(spec=httpx.Response)
         mock.status_code = 200
@@ -256,7 +256,7 @@ class TestOpenRouterCostFetching:
 
     def test_fetch_cost_data_handles_timeout(self) -> None:
         """Test that cost fetching handles timeout gracefully."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
 
         with patch("httpx.get", side_effect=httpx.TimeoutException("timeout")):
             cost_data = client._fetch_cost_data("gen_xyz", max_retries=0)
@@ -269,21 +269,21 @@ class TestCostSummary:
 
     def test_get_cost_summary_empty(self) -> None:
         """Test cost summary with no data."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
         summary = client.get_cost_summary()
         assert summary["total_cost_usd"] == 0.0
         assert summary["total_requests"] == 0
 
     def test_get_cost_summary_with_data(self) -> None:
         """Test cost summary with accumulated cost data."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
 
         # Manually add cost data
         client._cost_data_history.append(
             OpenRouterCostData(
                 generation_id="gen_1",
                 total_cost=0.01,
-                model="openai/gpt-4o",
+                model="openai/gpt-4.1",
                 prompt_tokens=100,
                 completion_tokens=50,
                 provider_name="OpenAI",
@@ -305,19 +305,19 @@ class TestCostSummary:
         assert summary["total_requests"] == 2
         assert summary["total_prompt_tokens"] == 300
         assert summary["total_completion_tokens"] == 150
-        assert "openai/gpt-4o" in summary["cost_by_model"]
+        assert "openai/gpt-4.1" in summary["cost_by_model"]
         assert "anthropic/claude-3" in summary["cost_by_model"]
 
     def test_reset_cost_tracking(self) -> None:
         """Test resetting cost tracking data."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
 
         # Add some cost data
         client._cost_data_history.append(
             OpenRouterCostData(
                 generation_id="gen_1",
                 total_cost=0.01,
-                model="openai/gpt-4o",
+                model="openai/gpt-4.1",
             )
         )
 
@@ -332,7 +332,7 @@ class TestOpenRouterProviderMapping:
     @pytest.mark.parametrize(
         "model,expected_provider",
         [
-            ("openai/gpt-4o", "openai"),
+            ("openai/gpt-4.1", "openai"),
             ("openai/gpt-4-turbo", "openai"),
             ("openai/gpt-3.5-turbo", "openai"),
             ("anthropic/claude-3-opus", "anthropic"),
@@ -355,5 +355,5 @@ class TestGetProviderName:
 
     def test_get_provider_name(self) -> None:
         """Test that _get_provider_name returns 'openrouter'."""
-        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4o")
+        client = OpenRouterClient(api_key="test-key", model="openai/gpt-4.1")
         assert client._get_provider_name() == "openrouter"

@@ -21,7 +21,7 @@ class TestOpenAIClientInit:
         """Test initialization with explicit API key."""
         client = OpenAIClient(api_key="test-key")
         assert client.api_key == "test-key"
-        assert client.model == "gpt-4o"
+        assert client.model == "gpt-4.1"
         assert client.base_url == "https://api.openai.com/v1"
 
     def test_init_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -39,8 +39,8 @@ class TestOpenAIClientInit:
 
     def test_init_with_custom_model(self) -> None:
         """Test initialization with custom model."""
-        client = OpenAIClient(api_key="test-key", model="gpt-4o-mini")
-        assert client.model == "gpt-4o-mini"
+        client = OpenAIClient(api_key="test-key", model="gpt-4.1-mini")
+        assert client.model == "gpt-4.1-mini"
 
     def test_init_with_custom_params(self) -> None:
         """Test initialization with custom parameters."""
@@ -85,7 +85,7 @@ class TestOpenAIClientGenerate:
             "id": "chatcmpl-123",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -117,7 +117,7 @@ class TestOpenAIClientGenerate:
             assert response.usage.prompt_tokens == 10
             assert response.usage.completion_tokens == 5
             assert response.usage.total_tokens == 15
-            assert response.model == "gpt-4o"
+            assert response.model == "gpt-4.1"
             assert response.finish_reason == "stop"
             assert response.response_id == "chatcmpl-123"
             assert not response.cached
@@ -400,7 +400,7 @@ class TestOpenAIStructuredOutputs:
             "id": "chatcmpl-123",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -469,7 +469,7 @@ class TestOpenAIStructuredOutputs:
             "id": "chatcmpl-456",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -519,7 +519,7 @@ class TestOpenAIStructuredOutputs:
             "id": "chatcmpl-789",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -569,7 +569,7 @@ class TestOpenAIStructuredOutputs:
             "id": "chatcmpl-999",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -612,7 +612,7 @@ class TestOpenAIStructuredOutputs:
             "id": "chatcmpl-888",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -654,7 +654,7 @@ class TestOpenAIStructuredOutputs:
             "id": "chatcmpl-cache",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -839,7 +839,7 @@ class TestOpenAICostTracking:
             "id": "chatcmpl-cost",
             "object": "chat.completion",
             "created": 1234567890,
-            "model": "gpt-4o",
+            "model": "gpt-4.1",
             "choices": [
                 {
                     "index": 0,
@@ -869,21 +869,22 @@ class TestOpenAICostTracking:
             assert response.tracking.prompt_tokens == 1000
             assert response.tracking.completion_tokens == 500
             assert response.tracking.provider == "openai"
-            assert response.tracking.model == "gpt-4o"
+            assert response.tracking.model == "gpt-4.1"
 
             # Check cost calculation
-            # GPT-4o: $2.50 per 1M input, $10.00 per 1M output
-            # (1000/1M * 2.50) + (500/1M * 10.00) = 0.0025 + 0.005 = 0.0075
-            assert response.tracking.cost_usd == pytest.approx(0.0075)
+            # GPT-4.1: $2.00 per 1M input, $8.00 per 1M output
+            # (1000/1M * 2.00) + (500/1M * 8.00) = 0.002 + 0.004 = 0.006
+            assert response.tracking.cost_usd == pytest.approx(0.006)
 
     def test_cost_tracking_different_models(self, client: OpenAIClient) -> None:
         """Test cost tracking with different models."""
         test_cases: list[dict[str, Any]] = [
             {
-                "model": "gpt-4o-mini",
+                "model": "gpt-4.1-mini",
                 "prompt_tokens": 10000,
                 "completion_tokens": 5000,
-                "expected_cost": 0.0045,  # (10000/1M * 0.150) + (5000/1M * 0.600)
+                # gpt-4.1-mini: $0.40 per 1M input, $1.60 per 1M output
+                "expected_cost": 0.012,  # (10000/1M * 0.40) + (5000/1M * 1.60)
             },
             {
                 "model": "gpt-3.5-turbo",

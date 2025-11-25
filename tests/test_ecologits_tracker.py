@@ -294,7 +294,7 @@ class TestCalculateEcologitsImpacts:
     ) -> None:
         """Test that zero output tokens returns None."""
         result = mixin._calculate_ecologits_impacts(
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_tokens=0,
             request_latency=1.0,
         )
@@ -305,7 +305,7 @@ class TestCalculateEcologitsImpacts:
     ) -> None:
         """Test that negative output tokens returns None."""
         result = mixin._calculate_ecologits_impacts(
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_tokens=-10,
             request_latency=1.0,
         )
@@ -323,7 +323,7 @@ class TestCalculateEcologitsImpacts:
         mock_llm_impacts.return_value = mock_impacts
 
         result = mixin._calculate_ecologits_impacts(
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_tokens=100,
             request_latency=1.5,
         )
@@ -331,7 +331,7 @@ class TestCalculateEcologitsImpacts:
         assert result == mock_impacts
         mock_llm_impacts.assert_called_once_with(
             provider="openai",
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_token_count=100,
             request_latency=1.5,
             electricity_mix_zone="WOR",
@@ -346,7 +346,7 @@ class TestCalculateEcologitsImpacts:
         mock_llm_impacts.return_value = mock_impacts
 
         mixin._calculate_ecologits_impacts(
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_tokens=100,
             request_latency=1.5,
             electricity_mix_zone="FRA",
@@ -354,7 +354,7 @@ class TestCalculateEcologitsImpacts:
 
         mock_llm_impacts.assert_called_once_with(
             provider="openai",
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_token_count=100,
             request_latency=1.5,
             electricity_mix_zone="FRA",
@@ -370,14 +370,14 @@ class TestCalculateEcologitsImpacts:
 
         mixin._set_electricity_mix_zone("DEU")
         mixin._calculate_ecologits_impacts(
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_tokens=100,
             request_latency=1.5,
         )
 
         mock_llm_impacts.assert_called_once_with(
             provider="openai",
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_token_count=100,
             request_latency=1.5,
             electricity_mix_zone="DEU",
@@ -408,7 +408,7 @@ class TestCalculateEcologitsImpacts:
         mock_llm_impacts.return_value = mock_impacts
 
         providers = [
-            ("openai", "gpt-4o"),
+            ("openai", "gpt-4.1"),
             ("anthropic", "claude-3-5-sonnet"),
             ("google_genai", "gemini-pro"),
             ("mistralai", "mistral-large"),
@@ -514,7 +514,7 @@ class TestEcoLogitsIntegration:
 
         # Calculate impacts
         impacts = mixin._calculate_ecologits_impacts(
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             output_tokens=100,
             request_latency=1.5,
             electricity_mix_zone="FRA",

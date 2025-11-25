@@ -28,7 +28,7 @@ from seeds_clients import OpenAIClient, Message
 # Initialize client with caching and tracking
 client = OpenAIClient(
     api_key="your-api-key",
-    model="gpt-4o",
+    model="gpt-4.1",
     cache_dir="./cache",
     enable_tracking=True,
     electricity_mix_zone="WOR"  # World average (default)
@@ -89,7 +89,7 @@ import asyncio
 async def main():
     async with OpenAIClient(
         api_key="your-api-key",
-        model="gpt-4o-mini"
+        model="gpt-4.1-mini"
     ) as client:
         # Single async request
         response = await client.agenerate(
@@ -213,7 +213,7 @@ seeds_clients/
 
 **Goals**: Implement clients for major LLM providers
 
-- [x] OpenAI client (GPT-4o, GPT-4, GPT-3.5)
+- [x] OpenAI client (GPT-4.1, GPT-4, GPT-3.5)
 - [x] Cost tracking with pricing database (JSON-based, easily updatable)
 - [x] Structured outputs with Pydantic models
 - [x] Multimodal support (text + images)
@@ -413,7 +413,7 @@ Model-based carbon estimation using research data:
 ```python
 client = OpenAIClient(
     api_key="...",
-    model="gpt-4o",
+    model="gpt-4.1",
     enable_tracking=True,
     tracking_method="ecologits",
     electricity_mix_zone="WOR"  # World average, or specific region

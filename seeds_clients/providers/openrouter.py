@@ -58,7 +58,7 @@ class OpenRouterClient(OpenAIClient):
     OpenRouter client for accessing multiple AI models through a unified API.
 
     OpenRouter provides access to various AI models including:
-    - OpenAI: openai/gpt-4o, openai/gpt-4o-mini
+    - OpenAI: openai/gpt-4.1, openai/gpt-4.1-mini
     - Anthropic: anthropic/claude-3-5-sonnet, anthropic/claude-3-opus
     - Meta: meta-llama/llama-3.1-405b-instruct
     - Google: google/gemini-pro-1.5
@@ -93,7 +93,7 @@ class OpenRouterClient(OpenAIClient):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "openai/gpt-4o",
+        model: str = "openai/gpt-4.1",
         cache_dir: str = "cache",
         ttl_hours: float | None = 24.0,
         max_tokens: int | None = None,
@@ -186,7 +186,7 @@ class OpenRouterClient(OpenAIClient):
         """
         Extract provider name from OpenRouter model string for EcoLogits.
 
-        OpenRouter models are formatted as "provider/model" (e.g., "openai/gpt-4o").
+        OpenRouter models are formatted as "provider/model" (e.g., "openai/gpt-4.1").
         This extracts the provider part for EcoLogits compatibility.
 
         Returns:
@@ -202,7 +202,7 @@ class OpenRouterClient(OpenAIClient):
         Extract model name from OpenRouter model string for EcoLogits.
 
         Returns:
-            Model name for EcoLogits (e.g., "gpt-4o", "claude-3-5-sonnet").
+            Model name for EcoLogits (e.g., "gpt-4.1", "claude-3-5-sonnet").
         """
         if "/" in self.model:
             _, model_name = self.model.split("/", 1)

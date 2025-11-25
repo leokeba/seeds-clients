@@ -12,7 +12,7 @@ async def basic_async_example():
 
     client = OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         cache_dir="cache",
     )
 
@@ -38,7 +38,7 @@ async def batch_processing_example():
 
     client = OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         cache_dir="cache",
     )
 
@@ -93,7 +93,7 @@ async def batch_iterator_example():
 
     client = OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         cache_dir="cache",
     )
 
@@ -129,7 +129,7 @@ async def async_context_manager_example():
 
     async with OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
     ) as client:
         response = await client.agenerate(
             messages=[Message(role="user", content="Hello!")]

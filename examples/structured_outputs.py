@@ -39,7 +39,7 @@ def example_basic_structured_output() -> None:
     """Extract structured data from unstructured text."""
     client = OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o",
+        model="gpt-4.1",
     )
 
     # Unstructured input
@@ -93,7 +93,7 @@ def example_complex_nested_structure() -> None:
 
     client = OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o",
+        model="gpt-4.1",
     )
 
     text = """
@@ -122,7 +122,7 @@ def example_with_caching() -> None:
     """Structured outputs work with automatic caching."""
     client = OpenAIClient(
         api_key=os.getenv("OPENAI_API_KEY"),
-        model="gpt-4o",
+        model="gpt-4.1",
         cache_dir="cache",
         ttl_hours=24.0,
     )

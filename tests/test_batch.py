@@ -14,7 +14,7 @@ def make_response(content: str, idx: int = 0) -> Response:
     return Response(
         content=content,
         usage=Usage(prompt_tokens=10, completion_tokens=20),
-        model="gpt-4o",
+        model="gpt-4.1",
         raw={"choices": [{"message": {"content": content}}]},
         tracking=TrackingData(
             cost_usd=0.01,
@@ -23,7 +23,7 @@ def make_response(content: str, idx: int = 0) -> Response:
             prompt_tokens=10,
             completion_tokens=20,
             provider="openai",
-            model="gpt-4o",
+            model="gpt-4.1",
             tracking_method="ecologits",
             duration_seconds=0.5,
         ),
@@ -35,7 +35,7 @@ def make_simple_response(content: str) -> Response:
     return Response(
         content=content,
         usage=Usage(prompt_tokens=10, completion_tokens=20),
-        model="gpt-4o",
+        model="gpt-4.1",
         raw={"choices": [{"message": {"content": content}}]},
     )
 
@@ -302,7 +302,7 @@ class TestAsyncGenerate:
                     prompt_tokens=raw["usage"]["prompt_tokens"],
                     completion_tokens=raw["usage"]["completion_tokens"],
                 ),
-                model="gpt-4o",
+                model="gpt-4.1",
                 raw=raw,
             )
 
@@ -343,7 +343,7 @@ class TestAsyncGenerate:
                     prompt_tokens=raw["usage"]["prompt_tokens"],
                     completion_tokens=raw["usage"]["completion_tokens"],
                 ),
-                model="gpt-4o",
+                model="gpt-4.1",
                 raw=raw,
             )
 

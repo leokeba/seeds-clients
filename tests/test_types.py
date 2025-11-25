@@ -73,7 +73,7 @@ class TestTrackingData:
             prompt_tokens=10,
             completion_tokens=20,
             provider="openai",
-            model="gpt-4o",
+            model="gpt-4.1",
             tracking_method="ecologits",
             duration_seconds=1.5,
         )
@@ -81,7 +81,7 @@ class TestTrackingData:
         assert tracking.gwp_kgco2eq == 0.0005
         assert tracking.cost_usd == 0.002
         assert tracking.provider == "openai"
-        assert tracking.model == "gpt-4o"
+        assert tracking.model == "gpt-4.1"
 
     def test_tracking_with_optional_fields(self) -> None:
         """Test tracking data with optional fields."""
@@ -94,7 +94,7 @@ class TestTrackingData:
             prompt_tokens=10,
             completion_tokens=20,
             provider="openai",
-            model="gpt-4o",
+            model="gpt-4.1",
             tracking_method="ecologits",
             electricity_mix_zone="FRA",
             duration_seconds=1.5,
@@ -112,7 +112,7 @@ class TestTrackingData:
             prompt_tokens=10,
             completion_tokens=20,
             provider="openai",
-            model="gpt-4o",
+            model="gpt-4.1",
             tracking_method="ecologits",
             duration_seconds=1.5,
         )
@@ -128,12 +128,12 @@ class TestResponse:
         response: Response[Any] = Response(
             content="Hello!",
             usage=usage,
-            model="gpt-4o",
+            model="gpt-4.1",
             raw={"choices": [{"message": {"content": "Hello!"}}]},
         )
         assert response.content == "Hello!"
         assert response.usage.total_tokens == 30
-        assert response.model == "gpt-4o"
+        assert response.model == "gpt-4.1"
         assert not response.cached
 
     def test_response_with_tracking(self) -> None:
@@ -146,14 +146,14 @@ class TestResponse:
             prompt_tokens=10,
             completion_tokens=20,
             provider="openai",
-            model="gpt-4o",
+            model="gpt-4.1",
             tracking_method="ecologits",
             duration_seconds=1.5,
         )
         response: Response[Any] = Response(
             content="Hello!",
             usage=usage,
-            model="gpt-4o",
+            model="gpt-4.1",
             raw={"choices": [{"message": {"content": "Hello!"}}]},
             tracking=tracking,
         )
@@ -166,7 +166,7 @@ class TestResponse:
         response: Response[Any] = Response(
             content="Hello!",
             usage=usage,
-            model="gpt-4o",
+            model="gpt-4.1",
             raw={"choices": [{"message": {"content": "Hello!"}}]},
             cached=True,
         )

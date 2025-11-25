@@ -129,7 +129,7 @@ class PerformanceAnalyzer:
     def __init__(
         self,
         provider: str = "openai",
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4.1-mini",
         verbose: bool = True,
     ):
         self.provider = provider
@@ -536,9 +536,9 @@ async def main():
     if args.model:
         model = args.model
     elif args.provider == "openrouter":
-        model = "openai/gpt-4o-mini"
+        model = "openai/gpt-4.1-mini"
     else:
-        model = "gpt-4o-mini"
+        model = "gpt-4.1-mini"
 
     # Run analysis
     analyzer = PerformanceAnalyzer(

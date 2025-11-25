@@ -82,7 +82,7 @@ class TrackingData(BaseModel):
 
     # Metadata
     provider: str = Field(description="LLM provider name (e.g., 'openai', 'anthropic')")
-    model: str = Field(description="Model identifier (e.g., 'gpt-4o', 'claude-3-5-sonnet')")
+    model: str = Field(description="Model identifier (e.g., 'gpt-4.1', 'claude-3-5-sonnet')")
     tracking_method: Literal["ecologits", "codecarbon", "none"] = Field(
         description="Method used for carbon tracking"
     )

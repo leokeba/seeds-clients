@@ -33,7 +33,7 @@ class BaseClient(ABC):
         """Initialize base client.
 
         Args:
-            model: Model identifier (e.g., 'gpt-4o', 'claude-3-5-sonnet')
+            model: Model identifier (e.g., 'gpt-4.1', 'claude-3-5-sonnet')
             api_key: API key for the provider (can also come from env vars)
             cache_dir: Directory for cache storage (None = no caching)
             cache_ttl_hours: Cache time-to-live in hours (None = no expiration)

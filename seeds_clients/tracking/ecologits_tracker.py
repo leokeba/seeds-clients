@@ -150,7 +150,7 @@ class EcoLogitsMixin:
         Calculate carbon impacts using EcoLogits.
 
         Args:
-            model_name: Name of the LLM model (e.g., "gpt-4o", "claude-3-5-sonnet")
+            model_name: Name of the LLM model (e.g., "gpt-4.1", "claude-3-5-sonnet")
             output_tokens: Number of completion/output tokens
             request_latency: Request duration in seconds
             electricity_mix_zone: ISO 3166-1 alpha-3 code for electricity mix.
@@ -275,7 +275,7 @@ class EcoLogitsMixin:
         Example:
             ```python
             impacts = self._calculate_ecologits_impacts(
-                model_name="gpt-4o",
+                model_name="gpt-4.1",
                 output_tokens=100,
                 request_latency=1.5,
             )

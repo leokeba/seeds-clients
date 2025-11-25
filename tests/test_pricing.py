@@ -20,26 +20,28 @@ class TestCalculateCost:
     """Tests for calculate_cost function."""
 
     def test_gpt4o_cost(self) -> None:
-        """Test cost calculation for GPT-4o."""
+        """Test cost calculation for GPT-4.1."""
         cost = calculate_cost(
-            model="gpt-4o",
+            model="gpt-4.1",
             prompt_tokens=1_000,
             completion_tokens=500,
         )
-        # (1000 / 1M * $2.50) + (500 / 1M * $10.00)
-        # = $0.0025 + $0.005 = $0.0075
-        assert cost == pytest.approx(0.0075)
+        # gpt-4.1: $2.00 per 1M input, $8.00 per 1M output
+        # (1000 / 1M * $2.00) + (500 / 1M * $8.00)
+        # = $0.002 + $0.004 = $0.006
+        assert cost == pytest.approx(0.006)
 
     def test_gpt4o_mini_cost(self) -> None:
-        """Test cost calculation for GPT-4o mini."""
+        """Test cost calculation for GPT-4.1 mini."""
         cost = calculate_cost(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             prompt_tokens=10_000,
             completion_tokens=5_000,
         )
-        # (10000 / 1M * $0.150) + (5000 / 1M * $0.600)
-        # = $0.0015 + $0.003 = $0.0045
-        assert cost == pytest.approx(0.0045)
+        # gpt-4.1-mini: $0.40 per 1M input, $1.60 per 1M output
+        # (10000 / 1M * $0.40) + (5000 / 1M * $1.60)
+        # = $0.004 + $0.008 = $0.012
+        assert cost == pytest.approx(0.012)
 
     def test_gpt35_turbo_cost(self) -> None:
         """Test cost calculation for GPT-3.5 Turbo."""
@@ -55,18 +57,19 @@ class TestCalculateCost:
     def test_large_token_count(self) -> None:
         """Test cost calculation with large token counts."""
         cost = calculate_cost(
-            model="gpt-4o",
+            model="gpt-4.1",
             prompt_tokens=1_000_000,
             completion_tokens=500_000,
         )
-        # (1M / 1M * $2.50) + (500K / 1M * $10.00)
-        # = $2.50 + $5.00 = $7.50
-        assert cost == pytest.approx(7.50)
+        # gpt-4.1: $2.00 per 1M input, $8.00 per 1M output
+        # (1M / 1M * $2.00) + (500K / 1M * $8.00)
+        # = $2.00 + $4.00 = $6.00
+        assert cost == pytest.approx(6.00)
 
     def test_zero_tokens(self) -> None:
         """Test cost calculation with zero tokens."""
         cost = calculate_cost(
-            model="gpt-4o",
+            model="gpt-4.1",
             prompt_tokens=0,
             completion_tokens=0,
         )
@@ -103,14 +106,14 @@ class TestGetModelPricing:
     """Tests for get_model_pricing function."""
 
     def test_get_gpt4o_pricing(self) -> None:
-        """Test getting pricing for GPT-4o."""
-        pricing = get_model_pricing("gpt-4o")
-        assert pricing == {"input": 2.50, "output": 10.00}
+        """Test getting pricing for GPT-4.1."""
+        pricing = get_model_pricing("gpt-4.1")
+        assert pricing == {"input": 2.00, "output": 8.00}
 
     def test_get_gpt4o_mini_pricing(self) -> None:
-        """Test getting pricing for GPT-4o mini."""
-        pricing = get_model_pricing("gpt-4o-mini")
-        assert pricing == {"input": 0.150, "output": 0.600}
+        """Test getting pricing for GPT-4.1 mini."""
+        pricing = get_model_pricing("gpt-4.1-mini")
+        assert pricing == {"input": 0.40, "output": 1.60}
 
     def test_get_gpt35_turbo_pricing(self) -> None:
         """Test getting pricing for GPT-3.5 Turbo."""
@@ -150,8 +153,8 @@ class TestOpenAIPricing:
     def test_common_models_present(self) -> None:
         """Test that common models are present in pricing data."""
         common_models = [
-            "gpt-4o",
-            "gpt-4o-mini",
+            "gpt-4.1",
+            "gpt-4.1-mini",
             "gpt-4-turbo",
             "gpt-4",
             "gpt-3.5-turbo",
@@ -166,13 +169,13 @@ class TestPricingDataManagement:
     def test_reload_pricing_data(self) -> None:
         """Test that pricing data can be reloaded."""
         # Get initial pricing
-        initial_pricing = get_model_pricing("gpt-4o")
+        initial_pricing = get_model_pricing("gpt-4.1")
 
         # Reload pricing data
         reload_pricing_data()
 
         # Should still have the same pricing
-        reloaded_pricing = get_model_pricing("gpt-4o")
+        reloaded_pricing = get_model_pricing("gpt-4.1")
         assert reloaded_pricing == initial_pricing
 
     def test_pricing_file_structure(self) -> None:

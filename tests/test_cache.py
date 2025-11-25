@@ -33,7 +33,7 @@ class TestCacheManager:
     def test_set_and_get(self, cache: CacheManager) -> None:
         """Test setting and getting cache entries."""
         key = "test_key"
-        data = {"model": "gpt-4o", "content": "Hello!"}
+        data = {"model": "gpt-4.1", "content": "Hello!"}
 
         cache.set(key, data)
         retrieved = cache.get(key)
@@ -47,7 +47,7 @@ class TestCacheManager:
     def test_delete(self, cache: CacheManager) -> None:
         """Test deleting cache entries."""
         key = "test_key"
-        data = {"model": "gpt-4o"}
+        data = {"model": "gpt-4.1"}
 
         cache.set(key, data)
         assert cache.get(key) is not None
@@ -71,7 +71,7 @@ class TestCacheManager:
         cache = CacheManager(cache_dir, ttl_hours=1 / 3600)
 
         key = "test_key"
-        data = {"model": "gpt-4o"}
+        data = {"model": "gpt-4.1"}
 
         cache.set(key, data)
         assert cache.get(key) is not None
@@ -87,7 +87,7 @@ class TestCacheManager:
         cache = CacheManager(cache_dir, ttl_hours=None)
 
         key = "test_key"
-        data = {"model": "gpt-4o"}
+        data = {"model": "gpt-4.1"}
 
         cache.set(key, data)
         time.sleep(0.1)
@@ -110,8 +110,8 @@ class TestCacheManager:
 
     def test_generate_key(self) -> None:
         """Test cache key generation is deterministic."""
-        data1 = {"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}
-        data2 = {"messages": [{"role": "user", "content": "Hello"}], "model": "gpt-4o"}
+        data1 = {"model": "gpt-4.1", "messages": [{"role": "user", "content": "Hello"}]}
+        data2 = {"messages": [{"role": "user", "content": "Hello"}], "model": "gpt-4.1"}
 
         key1 = CacheManager.generate_key(data1)
         key2 = CacheManager.generate_key(data2)
@@ -129,7 +129,7 @@ class TestCacheManager:
     def test_metadata(self, cache: CacheManager) -> None:
         """Test storing metadata with cache entries."""
         key = "test_key"
-        data = {"model": "gpt-4o"}
+        data = {"model": "gpt-4.1"}
         metadata = {"provider": "openai", "duration": 1.5}
 
         cache.set(key, data, metadata=metadata)

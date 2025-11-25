@@ -34,7 +34,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
 
         client = OpenAIClient(
             api_key=os.getenv("OPENAI_API_KEY"),
-            model="gpt-4o",
+            model="gpt-4.1",
             cache_dir="cache"
         )
 
@@ -50,7 +50,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gpt-4o",
+        model: str = "gpt-4.1",
         base_url: str = "https://api.openai.com/v1",
         cache_dir: str = "cache",
         ttl_hours: float | None = 24.0,
@@ -64,7 +64,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
 
         Args:
             api_key: OpenAI API key. If not provided, reads from OPENAI_API_KEY env var.
-            model: Model name (e.g., "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo").
+            model: Model name (e.g., "gpt-4.1", "gpt-4.1-mini", "gpt-3.5-turbo").
             base_url: API base URL.
             cache_dir: Directory for caching responses.
             ttl_hours: Cache TTL in hours. None for no expiration.
