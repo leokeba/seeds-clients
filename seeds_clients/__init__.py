@@ -9,7 +9,12 @@ from seeds_clients.core.exceptions import (
     ValidationError,
 )
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
-from seeds_clients.providers import BatchResult, OpenAIClient
+from seeds_clients.providers import (
+    BatchResult,
+    OpenAIClient,
+    OpenRouterClient,
+    OpenRouterCostData,
+)
 
 __version__ = "0.1.0"
 
@@ -28,4 +33,6 @@ __all__ = [
     "ValidationError",
     # Providers
     "OpenAIClient",
+    "OpenRouterClient",
+    "OpenRouterCostData",
 ]
