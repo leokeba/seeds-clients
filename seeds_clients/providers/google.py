@@ -1,7 +1,5 @@
 """Google Gemini client implementation using the google-genai SDK."""
 
-import asyncio
-import json
 import os
 import time
 from contextlib import suppress
@@ -11,7 +9,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from seeds_clients.core.base_client import BaseClient
-from seeds_clients.core.exceptions import ConfigurationError, ProviderError, ValidationError
+from seeds_clients.core.exceptions import ConfigurationError, ProviderError
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
 from seeds_clients.tracking.ecologits_tracker import EcoLogitsMixin
 from seeds_clients.utils.pricing import calculate_cost
@@ -194,35 +192,8 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             print(response.parsed.age)   # 30
             ```
         """
-        # Extract response_format if provided
-        response_format = kwargs.pop("response_format", None)
-
-        # Call parent generate method (handles caching)
-        response = super().generate(messages, use_cache=use_cache, **kwargs)
-
-        # Parse structured output if response_format was provided
-        if response_format is not None and response.content:
-            try:
-                parsed_data = json.loads(response.content)
-                parsed_model = response_format(**parsed_data)
-                # Create new response with parsed data
-                response = Response(
-                    content=response.content,
-                    usage=response.usage,
-                    model=response.model,
-                    raw=response.raw,
-                    tracking=response.tracking,
-                    cached=response.cached,
-                    finish_reason=response.finish_reason,
-                    response_id=response.response_id,
-                    parsed=parsed_model,
-                )
-            except (json.JSONDecodeError, ValueError) as e:
-                raise ValidationError(
-                    f"Failed to parse structured output: {str(e)}"
-                ) from e
-
-        return response
+        # Call parent generate method (handles caching and structured output parsing)
+        return super().generate(messages, use_cache=use_cache, **kwargs)
 
     async def agenerate(
         self,
@@ -259,78 +230,8 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             asyncio.run(main())
             ```
         """
-        # Extract response_format if provided
-        response_format = kwargs.pop("response_format", None)
-
-        # Generate cache key
-        cache_key = self._compute_cache_key(messages, kwargs)
-
-        # Try cache first
-        if use_cache and self.cache:
-            cached_raw = self.cache.get(cache_key)
-            if cached_raw:
-                response = self._parse_response(cached_raw)
-                response.cached = True
-                # Parse structured output if needed
-                if response_format is not None and response.content:
-                    try:
-                        parsed_data = json.loads(response.content)
-                        parsed_model = response_format(**parsed_data)
-                        response = Response(
-                            content=response.content,
-                            usage=response.usage,
-                            model=response.model,
-                            raw=response.raw,
-                            tracking=response.tracking,
-                            cached=response.cached,
-                            finish_reason=response.finish_reason,
-                            response_id=response.response_id,
-                            parsed=parsed_model,
-                        )
-                    except (json.JSONDecodeError, ValueError) as e:
-                        raise ValidationError(
-                            f"Failed to parse structured output: {str(e)}"
-                        ) from e
-                return response
-
-        # Call API asynchronously
-        raw_response = await self._acall_api(messages, **kwargs)
-
-        # Parse response
-        response = self._parse_response(raw_response)
-        response.cached = False
-
-        # Cache the raw response
-        if use_cache and self.cache:
-            metadata = {
-                "model": self.model,
-                "provider": self._get_provider_name(),
-                "duration_seconds": raw_response.get("_duration_seconds", 0.0),
-            }
-            self.cache.set(cache_key, raw_response, metadata)
-
-        # Parse structured output if response_format was provided
-        if response_format is not None and response.content:
-            try:
-                parsed_data = json.loads(response.content)
-                parsed_model = response_format(**parsed_data)
-                response = Response(
-                    content=response.content,
-                    usage=response.usage,
-                    model=response.model,
-                    raw=response.raw,
-                    tracking=response.tracking,
-                    cached=response.cached,
-                    finish_reason=response.finish_reason,
-                    response_id=response.response_id,
-                    parsed=parsed_model,
-                )
-            except (json.JSONDecodeError, ValueError) as e:
-                raise ValidationError(
-                    f"Failed to parse structured output: {str(e)}"
-                ) from e
-
-        return response
+        # Call parent agenerate method (handles caching and structured output parsing)
+        return await super().agenerate(messages, use_cache=use_cache, **kwargs)
 
     def _build_generation_config(
         self,

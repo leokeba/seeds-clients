@@ -1,15 +1,22 @@
 """Abstract base client for all LLM providers."""
 
 import asyncio
+import json
 import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+from pydantic import BaseModel
 
 from seeds_clients.core.batch import BatchResult
 from seeds_clients.core.cache import CacheManager
+from seeds_clients.core.exceptions import ValidationError
 from seeds_clients.core.types import Message, Response, TrackingData
+
+# Type variable for structured outputs
+T = TypeVar("T", bound=BaseModel)
 
 
 class BaseClient(ABC):
@@ -128,23 +135,50 @@ class BaseClient(ABC):
         messages: list[Message],
         use_cache: bool = True,
         **kwargs: Any,
-    ) -> Response:
+    ) -> Response[Any]:
         """Generate a response from the LLM.
 
         Main entry point for text generation with automatic caching and tracking.
+        Supports structured outputs via the response_format kwarg.
 
         Args:
             messages: List of conversation messages
             use_cache: Whether to use cache for this request
             **kwargs: Additional generation parameters (temperature, max_tokens, etc.)
+                Special kwargs:
+                - response_format: Pydantic model class for structured output
 
         Returns:
-            Response object with generated text and metadata
+            Response object with generated text and metadata.
+            If response_format is provided, response.parsed contains the validated model.
 
         Raises:
             ProviderError: If API call fails
-            ValidationError: If response is invalid
+            ValidationError: If response is invalid or structured output parsing fails
+
+        Example:
+            ```python
+            from pydantic import BaseModel
+
+            class Person(BaseModel):
+                name: str
+                age: int
+
+            response = client.generate(
+                messages=[Message(role="user", content="Extract: John is 30")],
+                response_format=Person
+            )
+            print(response.parsed.name)  # "John"
+            print(response.parsed.age)   # 30
+            ```
         """
+        # Extract response_format if provided (keep copy for parsing later)
+        # Check for _original_response_format first (set by providers that transform the format)
+        response_format = kwargs.pop("_original_response_format", None) or kwargs.get("response_format", None)
+        # Ensure response_format is a Pydantic model class, not a transformed dict
+        if response_format is not None and not (isinstance(response_format, type) and issubclass(response_format, BaseModel)):
+            response_format = None
+
         # Generate cache key
         cache_key = self._compute_cache_key(messages, kwargs)
 
@@ -154,6 +188,9 @@ class BaseClient(ABC):
             if cached_raw:
                 response = self._parse_response(cached_raw)
                 response.cached = True
+                # Parse structured output if response_format was provided
+                if response_format is not None and response.content:
+                    response = self._parse_structured_output(response, response_format)
                 return response
 
         # Call API with timing
@@ -180,6 +217,10 @@ class BaseClient(ABC):
             }
             self.cache.set(cache_key, raw_response, metadata)
 
+        # Parse structured output if response_format was provided
+        if response_format is not None and response.content:
+            response = self._parse_structured_output(response, response_format)
+
         return response
 
     async def agenerate(
@@ -187,31 +228,49 @@ class BaseClient(ABC):
         messages: list[Message],
         use_cache: bool = True,
         **kwargs: Any,
-    ) -> Response:
+    ) -> Response[Any]:
         """Generate a response asynchronously.
 
         Async version of generate() for concurrent request handling.
+        Supports structured outputs via the response_format kwarg.
 
         Args:
             messages: List of conversation messages
             use_cache: Whether to use cache for this request
             **kwargs: Additional generation parameters
+                Special kwargs:
+                - response_format: Pydantic model class for structured output
 
         Returns:
-            Response object with generated text and metadata
+            Response object with generated text and metadata.
+            If response_format is provided, response.parsed contains the validated model.
 
         Raises:
             ProviderError: If API call fails
-            ValidationError: If response is invalid
+            ValidationError: If response is invalid or structured output parsing fails
 
         Example:
             ```python
-            response = await client.agenerate([
-                Message(role="user", content="Hello!")
-            ])
-            print(response.content)
+            from pydantic import BaseModel
+
+            class Person(BaseModel):
+                name: str
+                age: int
+
+            response = await client.agenerate(
+                messages=[Message(role="user", content="Extract: John is 30")],
+                response_format=Person
+            )
+            print(response.parsed.name)  # "John"
             ```
         """
+        # Extract response_format if provided (keep copy for parsing later)
+        # Check for _original_response_format first (set by providers that transform the format)
+        response_format = kwargs.pop("_original_response_format", None) or kwargs.get("response_format", None)
+        # Ensure response_format is a Pydantic model class, not a transformed dict
+        if response_format is not None and not (isinstance(response_format, type) and issubclass(response_format, BaseModel)):
+            response_format = None
+
         # Generate cache key
         cache_key = self._compute_cache_key(messages, kwargs)
 
@@ -221,6 +280,9 @@ class BaseClient(ABC):
             if cached_raw:
                 response = self._parse_response(cached_raw)
                 response.cached = True
+                # Parse structured output if response_format was provided
+                if response_format is not None and response.content:
+                    response = self._parse_structured_output(response, response_format)
                 return response
 
         # Call API with timing
@@ -246,6 +308,10 @@ class BaseClient(ABC):
                 "duration_seconds": duration,
             }
             self.cache.set(cache_key, raw_response, metadata)
+
+        # Parse structured output if response_format was provided
+        if response_format is not None and response.content:
+            response = self._parse_structured_output(response, response_format)
 
         return response
 
@@ -468,6 +534,46 @@ class BaseClient(ABC):
             Provider name (e.g., 'openai', 'anthropic')
         """
         pass
+
+    def _parse_structured_output(
+        self,
+        response: Response[Any],
+        response_format: type[T],
+    ) -> Response[T]:
+        """Parse response content as structured output.
+
+        Takes a Response with JSON content and parses it into the provided
+        Pydantic model, returning a new Response with the parsed field populated.
+
+        Args:
+            response: Response object with JSON content
+            response_format: Pydantic model class to parse content into
+
+        Returns:
+            New Response object with parsed field populated
+
+        Raises:
+            ValidationError: If JSON parsing or Pydantic validation fails
+        """
+        try:
+            parsed_data = json.loads(response.content)
+            parsed_model = response_format(**parsed_data)
+            # Create new response with parsed data
+            return Response(
+                content=response.content,
+                usage=response.usage,
+                model=response.model,
+                raw=response.raw,
+                tracking=response.tracking,
+                cached=response.cached,
+                finish_reason=response.finish_reason,
+                response_id=response.response_id,
+                parsed=parsed_model,
+            )
+        except (json.JSONDecodeError, ValueError) as e:
+            raise ValidationError(
+                f"Failed to parse structured output: {str(e)}"
+            ) from e
 
     def _track_request(
         self,
