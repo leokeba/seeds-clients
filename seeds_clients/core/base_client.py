@@ -1,10 +1,13 @@
 """Abstract base client for all LLM providers."""
 
+import asyncio
 import time
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any
 
+from seeds_clients.core.batch import BatchResult
 from seeds_clients.core.cache import CacheManager
 from seeds_clients.core.types import Message, Response, TrackingData
 
@@ -72,6 +75,26 @@ class BaseClient(ABC):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Call provider API and return raw response.
+
+        Args:
+            messages: List of conversation messages
+            **kwargs: Additional API parameters
+
+        Returns:
+            Raw API response as dictionary
+
+        Raises:
+            ProviderError: If API call fails
+        """
+        pass
+
+    @abstractmethod
+    async def _acall_api(
+        self,
+        messages: list[Message],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Call provider API asynchronously and return raw response.
 
         Args:
             messages: List of conversation messages
@@ -158,6 +181,218 @@ class BaseClient(ABC):
             self.cache.set(cache_key, raw_response, metadata)
 
         return response
+
+    async def agenerate(
+        self,
+        messages: list[Message],
+        use_cache: bool = True,
+        **kwargs: Any,
+    ) -> Response:
+        """Generate a response asynchronously.
+
+        Async version of generate() for concurrent request handling.
+
+        Args:
+            messages: List of conversation messages
+            use_cache: Whether to use cache for this request
+            **kwargs: Additional generation parameters
+
+        Returns:
+            Response object with generated text and metadata
+
+        Raises:
+            ProviderError: If API call fails
+            ValidationError: If response is invalid
+
+        Example:
+            ```python
+            response = await client.agenerate([
+                Message(role="user", content="Hello!")
+            ])
+            print(response.content)
+            ```
+        """
+        # Generate cache key
+        cache_key = self._compute_cache_key(messages, kwargs)
+
+        # Try cache first
+        if use_cache and self.cache:
+            cached_raw = self.cache.get(cache_key)
+            if cached_raw:
+                response = self._parse_response(cached_raw)
+                response.cached = True
+                return response
+
+        # Call API with timing
+        start_time = time.time()
+        raw_response = await self._acall_api(messages, **kwargs)
+        duration = time.time() - start_time
+
+        # Parse response
+        response = self._parse_response(raw_response)
+
+        # Add tracking if enabled
+        if response.tracking is None and self.enable_tracking and self.tracker:
+            tracking_data = self._track_request(raw_response, duration)
+            response.tracking = tracking_data
+
+        response.cached = False
+
+        # Cache the raw response
+        if use_cache and self.cache:
+            metadata = {
+                "model": self.model,
+                "provider": self._get_provider_name(),
+                "duration_seconds": duration,
+            }
+            self.cache.set(cache_key, raw_response, metadata)
+
+        return response
+
+    async def batch_generate(
+        self,
+        messages_list: list[list[Message]],
+        max_concurrent: int = 5,
+        use_cache: bool = True,
+        on_progress: Callable[[int, int, Response | Exception], None] | None = None,
+        **kwargs: Any,
+    ) -> BatchResult:
+        """Generate responses for multiple prompts concurrently.
+
+        Processes a batch of requests with configurable concurrency limit.
+        Aggregates metrics across all successful requests.
+
+        Args:
+            messages_list: List of message lists (one per request)
+            max_concurrent: Maximum concurrent requests (default: 5)
+            use_cache: Whether to use cache for requests
+            on_progress: Optional callback(completed, total, result_or_error)
+            **kwargs: Additional generation parameters for all requests
+
+        Returns:
+            BatchResult with responses and aggregated metrics
+
+        Example:
+            ```python
+            prompts = [
+                [Message(role="user", content="Explain Python")],
+                [Message(role="user", content="Explain JavaScript")],
+                [Message(role="user", content="Explain Rust")],
+            ]
+
+            result = await client.batch_generate(
+                prompts,
+                max_concurrent=3,
+                on_progress=lambda done, total, r: print(f"{done}/{total}")
+            )
+
+            print(f"Success: {result.successful_count}/{result.total_count}")
+            print(f"Total cost: ${result.total_cost_usd:.4f}")
+            ```
+        """
+        batch_start = time.time()
+        result = BatchResult()
+        semaphore = asyncio.Semaphore(max_concurrent)
+        completed = 0
+
+        async def process_one(index: int, messages: list[Message]) -> tuple[int, Response | Exception]:
+            nonlocal completed
+            async with semaphore:
+                try:
+                    response = await self.agenerate(messages, use_cache=use_cache, **kwargs)
+                    completed += 1
+                    if on_progress:
+                        on_progress(completed, len(messages_list), response)
+                    return index, response
+                except Exception as e:
+                    completed += 1
+                    if on_progress:
+                        on_progress(completed, len(messages_list), e)
+                    return index, e
+
+        # Run all tasks concurrently
+        tasks = [process_one(i, msgs) for i, msgs in enumerate(messages_list)]
+        results = await asyncio.gather(*tasks)
+
+        # Process results in order
+        for index, res in sorted(results, key=lambda x: x[0]):
+            if isinstance(res, Exception):
+                result.errors.append((index, res))
+            else:
+                result.responses.append(res)
+                # Aggregate metrics
+                if res.usage:
+                    result.total_prompt_tokens += res.usage.prompt_tokens or 0
+                    result.total_completion_tokens += res.usage.completion_tokens or 0
+                if res.tracking:
+                    result.total_cost_usd += res.tracking.cost_usd or 0.0
+                    result.total_energy_kwh += res.tracking.energy_kwh or 0.0
+                    result.total_gwp_kgco2eq += res.tracking.gwp_kgco2eq or 0.0
+
+        result.total_duration_seconds = time.time() - batch_start
+        return result
+
+    async def batch_generate_iter(
+        self,
+        messages_list: list[list[Message]],
+        max_concurrent: int = 5,
+        use_cache: bool = True,
+        **kwargs: Any,
+    ) -> AsyncIterator[tuple[int, Response | Exception]]:
+        """Generate responses as an async iterator, yielding as completed.
+
+        Unlike batch_generate, this yields results as they complete rather
+        than waiting for all to finish. Useful for progress tracking or
+        early processing.
+
+        Args:
+            messages_list: List of message lists (one per request)
+            max_concurrent: Maximum concurrent requests (default: 5)
+            use_cache: Whether to use cache for requests
+            **kwargs: Additional generation parameters for all requests
+
+        Yields:
+            Tuples of (index, response_or_exception) as they complete
+
+        Example:
+            ```python
+            async for idx, result in client.batch_generate_iter(prompts):
+                if isinstance(result, Exception):
+                    print(f"Request {idx} failed: {result}")
+                else:
+                    print(f"Request {idx}: {result.content[:50]}...")
+            ```
+        """
+        semaphore = asyncio.Semaphore(max_concurrent)
+        queue: asyncio.Queue[tuple[int, Response | Exception] | None] = asyncio.Queue()
+
+        async def process_one(index: int, messages: list[Message]) -> None:
+            async with semaphore:
+                try:
+                    response = await self.agenerate(messages, use_cache=use_cache, **kwargs)
+                    await queue.put((index, response))
+                except Exception as e:
+                    await queue.put((index, e))
+
+        async def producer() -> None:
+            tasks = [asyncio.create_task(process_one(i, msgs)) for i, msgs in enumerate(messages_list)]
+            await asyncio.gather(*tasks)
+            await queue.put(None)  # Signal completion
+
+        producer_task = asyncio.create_task(producer())
+
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            producer_task.cancel()
+            try:
+                await producer_task
+            except asyncio.CancelledError:
+                pass
 
     def _compute_cache_key(
         self,
@@ -271,6 +506,13 @@ class BaseClient(ABC):
         if self.cache:
             self.cache.close()
 
+    async def aclose(self) -> None:
+        """Close client asynchronously and clean up resources.
+
+        Subclasses should override this to close async HTTP clients.
+        """
+        self.close()
+
     def __enter__(self) -> "BaseClient":
         """Context manager entry."""
         return self
@@ -278,3 +520,11 @@ class BaseClient(ABC):
     def __exit__(self, *args: Any) -> None:
         """Context manager exit."""
         self.close()
+
+    async def __aenter__(self) -> "BaseClient":
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        """Async context manager exit."""
+        await self.aclose()

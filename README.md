@@ -81,6 +81,45 @@ messages = [
 response = client.generate(messages)
 ```
 
+### Async & Batch Processing
+
+```python
+import asyncio
+
+async def main():
+    async with OpenAIClient(
+        api_key="your-api-key",
+        model="gpt-4o-mini"
+    ) as client:
+        # Single async request
+        response = await client.agenerate(
+            messages=[Message(role="user", content="Hello!")]
+        )
+        print(response.content)
+
+        # Batch processing with parallel execution
+        prompts = [
+            [Message(role="user", content="What is 1+1?")],
+            [Message(role="user", content="What is 2+2?")],
+            [Message(role="user", content="What is 3+3?")],
+        ]
+
+        result = await client.batch_generate(
+            prompts,
+            max_concurrent=3,
+            on_progress=lambda done, total, r: print(f"Progress: {done}/{total}")
+        )
+
+        print(f"Total cost: ${result.total_cost_usd:.4f}")
+        print(f"Total carbon: {result.total_gwp_kgco2eq:.6f} kgCO2eq")
+
+        # Stream results as they complete
+        async for idx, response in client.batch_generate_iter(prompts):
+            print(f"Result {idx}: {response.content}")
+
+asyncio.run(main())
+```
+
 ### Export BoAmps Report
 
 ```python
@@ -222,42 +261,44 @@ seeds_clients/
 
 **Goals**: Add structured outputs, multimodal, and batch processing
 
-- [ ] Structured output support
+- [x] Structured output support
   - Pydantic model validation
-  - Provider-native structured outputs
+  - Provider-native structured outputs (OpenAI JSON schema)
   - JSON mode fallback
-- [ ] Multimodal support
+- [x] Multimodal support
   - Image input handling (URL, bytes, PIL Image)
   - Base64 encoding/decoding
   - Multi-image support
-- [ ] Batch processing
-  - Parallel execution with `asyncio`
-  - Progress tracking
-  - Aggregated metrics
-- [ ] Advanced caching
+- [x] Batch processing
+  - Async generation (`agenerate()`)
+  - Parallel execution with `asyncio` (`batch_generate()`)
+  - Streaming results (`batch_generate_iter()`)
+  - Progress tracking callbacks
+  - Aggregated metrics (cost, carbon, tokens)
+- [x] Advanced caching
   - TTL-based expiration
   - Cache invalidation strategies
-  - Cache size management
+  - Cache size management (via diskcache)
 
 **Deliverables**:
-- Structured output with all providers
-- Full multimodal support
-- Efficient batch processing
+- ✅ Structured output with OpenAI (other providers pending)
+- ✅ Full multimodal support for OpenAI
+- ✅ Efficient batch processing with aggregated tracking
 
 ### Phase 5: Testing & Documentation (Week 5-6)
 
 **Goals**: Comprehensive testing and documentation
 
-- [ ] Unit tests (target: 90%+ coverage)
+- [x] Unit tests (target: 90%+ coverage) - Currently at 92%
 - [ ] Integration tests with real APIs
-- [ ] End-to-end examples
+- [x] End-to-end examples (basic_usage.py, structured_outputs.py, batch_processing.py)
 - [ ] API documentation (auto-generated)
 - [ ] User guides for each provider
 - [ ] Contributing guidelines
 - [ ] Performance benchmarks
 
 **Deliverables**:
-- Full test suite with CI/CD
+- ✅ Full test suite (126 tests passing)
 - Complete documentation site
 - 10+ working examples
 

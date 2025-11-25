@@ -1,5 +1,6 @@
 """OpenAI client implementation."""
 
+import asyncio
 import json
 import os
 import time
@@ -111,6 +112,22 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             timeout=60.0,
         )
 
+        # Async HTTP client (lazy initialized)
+        self._async_http_client: httpx.AsyncClient | None = None
+
+    def _get_async_client(self) -> httpx.AsyncClient:
+        """Get or create the async HTTP client."""
+        if self._async_http_client is None:
+            self._async_http_client = httpx.AsyncClient(
+                base_url=self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=60.0,
+            )
+        return self._async_http_client
+
     def _get_provider_name(self) -> str:
         """Return provider name for tracking."""
         return "openai"
@@ -204,6 +221,211 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
 
         return response
 
+    async def agenerate(
+        self,
+        messages: list[Message],
+        use_cache: bool = True,
+        **kwargs: Any,
+    ) -> Response[Any]:
+        """
+        Asynchronously generate a response from the LLM.
+
+        Supports structured outputs via the response_format kwarg.
+
+        Args:
+            messages: List of messages in the conversation.
+            use_cache: Whether to use cache for this request.
+            **kwargs: Additional API parameters. Special kwargs:
+                - response_format: Pydantic model class for structured output
+                - temperature: Sampling temperature
+                - max_tokens: Maximum completion tokens
+
+        Returns:
+            Response object with content, usage, and optionally parsed structured data.
+
+        Example:
+            ```python
+            import asyncio
+
+            async def main():
+                response = await client.agenerate(
+                    messages=[Message(role="user", content="Hello!")]
+                )
+                print(response.content)
+
+            asyncio.run(main())
+            ```
+        """
+        # Extract response_format if provided
+        response_format = kwargs.pop("response_format", None)
+
+        # Add structured output configuration if provided
+        if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+            schema = self._pydantic_to_json_schema(response_format)
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_format.__name__,
+                    "schema": schema,
+                    "strict": True,
+                },
+            }
+
+        # Generate cache key
+        cache_key = self._compute_cache_key(messages, kwargs)
+
+        # Try cache first
+        if use_cache and self.cache:
+            cached_raw = self.cache.get(cache_key)
+            if cached_raw:
+                response = self._parse_response(cached_raw)
+                response.cached = True
+                # Parse structured output if needed
+                if response_format is not None and response.content:
+                    try:
+                        parsed_data = json.loads(response.content)
+                        parsed_model = response_format(**parsed_data)
+                        response = Response(
+                            content=response.content,
+                            usage=response.usage,
+                            model=response.model,
+                            raw=response.raw,
+                            tracking=response.tracking,
+                            cached=response.cached,
+                            finish_reason=response.finish_reason,
+                            response_id=response.response_id,
+                            parsed=parsed_model,
+                        )
+                    except (json.JSONDecodeError, ValueError) as e:
+                        raise ValidationError(
+                            f"Failed to parse structured output: {str(e)}"
+                        ) from e
+                return response
+
+        # Call API asynchronously
+        raw_response = await self._acall_api(messages, **kwargs)
+
+        # Parse response
+        response = self._parse_response(raw_response)
+        response.cached = False
+
+        # Cache the raw response
+        if use_cache and self.cache:
+            metadata = {
+                "model": self.model,
+                "provider": self._get_provider_name(),
+                "duration_seconds": raw_response.get("_duration_seconds", 0.0),
+            }
+            self.cache.set(cache_key, raw_response, metadata)
+
+        # Parse structured output if response_format was provided
+        if response_format is not None and response.content:
+            try:
+                parsed_data = json.loads(response.content)
+                parsed_model = response_format(**parsed_data)
+                response = Response(
+                    content=response.content,
+                    usage=response.usage,
+                    model=response.model,
+                    raw=response.raw,
+                    tracking=response.tracking,
+                    cached=response.cached,
+                    finish_reason=response.finish_reason,
+                    response_id=response.response_id,
+                    parsed=parsed_model,
+                )
+            except (json.JSONDecodeError, ValueError) as e:
+                raise ValidationError(
+                    f"Failed to parse structured output: {str(e)}"
+                ) from e
+
+        return response
+
+    async def _acall_api(
+        self,
+        messages: list[Message],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Asynchronously call OpenAI API.
+
+        Args:
+            messages: List of messages.
+            **kwargs: Additional API parameters.
+
+        Returns:
+            Raw API response as dict.
+
+        Raises:
+            ProviderError: If API call fails.
+        """
+        # Build request payload
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": self._format_messages(messages),
+        }
+
+        # Add optional parameters
+        if self.max_tokens is not None:
+            payload["max_tokens"] = self.max_tokens
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+
+        # Override with kwargs
+        payload.update(kwargs)
+
+        # Track start time for duration
+        start_time = time.time()
+
+        try:
+            client = self._get_async_client()
+            response = await client.post(
+                "/chat/completions",
+                json=payload,
+            )
+            response.raise_for_status()
+            result: dict[str, Any] = response.json()
+
+            # Calculate request duration
+            duration_seconds = time.time() - start_time
+            result["_duration_seconds"] = duration_seconds
+
+            # Calculate EcoLogits carbon impacts
+            usage = result.get("usage", {})
+            output_tokens = usage.get("completion_tokens", 0)
+            model_name = result.get("model", self.model)
+
+            impacts = self._calculate_ecologits_impacts(
+                model_name=model_name,
+                output_tokens=output_tokens,
+                request_latency=duration_seconds,
+                electricity_mix_zone=self.electricity_mix_zone,
+            )
+            if impacts:
+                result["_ecologits_impacts"] = impacts
+
+            return result
+
+        except httpx.HTTPStatusError as e:
+            error_detail = ""
+            try:
+                error_data = e.response.json()
+                error_detail = error_data.get("error", {}).get("message", "")
+            except Exception:
+                error_detail = e.response.text
+
+            raise ProviderError(
+                f"OpenAI API error: {error_detail}",
+                provider="openai",
+                status_code=e.response.status_code,
+            ) from e
+
+        except httpx.RequestError as e:
+            raise ProviderError(
+                f"Request failed: {str(e)}",
+                provider="openai",
+            ) from e
+
     def _pydantic_to_json_schema(self, model: type[BaseModel]) -> dict[str, Any]:
         """
         Convert Pydantic model to JSON schema for OpenAI API.
@@ -255,9 +477,31 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         return schema
 
     def __del__(self) -> None:
-        """Clean up HTTP client."""
+        """Clean up HTTP clients."""
         if hasattr(self, "_http_client"):
             self._http_client.close()
+        # Note: Async client should be closed via aclose() in async context
+
+    async def aclose(self) -> None:
+        """Asynchronously close the client and clean up resources."""
+        if self._async_http_client is not None:
+            await self._async_http_client.aclose()
+            self._async_http_client = None
+
+    def close(self) -> None:
+        """Close the client and clean up resources."""
+        if hasattr(self, "_http_client"):
+            self._http_client.close()
+        # Close async client if it exists (sync version)
+        if self._async_http_client is not None:
+            # Can't await in sync method, but we can try to close it
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._async_http_client.aclose())
+            except RuntimeError:
+                # No running event loop, try sync close if possible
+                pass
+            self._async_http_client = None
 
     def _call_api(
         self,
