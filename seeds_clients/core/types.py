@@ -83,8 +83,8 @@ class TrackingData(BaseModel):
     # Metadata
     provider: str = Field(description="LLM provider name (e.g., 'openai', 'anthropic')")
     model: str = Field(description="Model identifier (e.g., 'gpt-4.1', 'claude-3-5-sonnet')")
-    tracking_method: Literal["ecologits", "codecarbon", "none"] = Field(
-        description="Method used for carbon tracking"
+    tracking_method: Literal["ecologits", "codecarbon", "codecarbon_estimated", "none"] | None = Field(
+        default=None, description="Method used for carbon tracking"
     )
     electricity_mix_zone: str | None = Field(
         default=None,
@@ -128,6 +128,26 @@ class TrackingData(BaseModel):
     )
     ecologits_errors: list[str] | None = Field(
         default=None, description="Error messages from EcoLogits calculation"
+    )
+
+    # CodeCarbon hardware-measured fields (when tracking_method is codecarbon)
+    cpu_energy_kwh: float | None = Field(
+        default=None, ge=0, description="CPU energy consumption in kWh (CodeCarbon)"
+    )
+    gpu_energy_kwh: float | None = Field(
+        default=None, ge=0, description="GPU energy consumption in kWh (CodeCarbon)"
+    )
+    ram_energy_kwh: float | None = Field(
+        default=None, ge=0, description="RAM energy consumption in kWh (CodeCarbon)"
+    )
+    cpu_power_watts: float | None = Field(
+        default=None, ge=0, description="CPU power usage in watts (CodeCarbon)"
+    )
+    gpu_power_watts: float | None = Field(
+        default=None, ge=0, description="GPU power usage in watts (CodeCarbon)"
+    )
+    ram_power_watts: float | None = Field(
+        default=None, ge=0, description="RAM power usage in watts (CodeCarbon)"
     )
 
 

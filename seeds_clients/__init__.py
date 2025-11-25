@@ -11,6 +11,7 @@ from seeds_clients.core.exceptions import (
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
 from seeds_clients.providers import (
     BatchResult,
+    ModelGardenClient,
     OpenAIClient,
     OpenRouterClient,
     OpenRouterCostData,
@@ -35,4 +36,5 @@ __all__ = [
     "OpenAIClient",
     "OpenRouterClient",
     "OpenRouterCostData",
+    "ModelGardenClient",
 ]
