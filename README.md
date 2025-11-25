@@ -48,6 +48,42 @@ print(f"Usage phase GWP: {response.tracking.gwp_usage_kgco2eq:.6f} kgCO2eq")
 print(f"Embodied phase GWP: {response.tracking.gwp_embodied_kgco2eq:.6f} kgCO2eq")
 ```
 
+### Using Google Gemini
+
+```python
+from seeds_clients import GoogleClient, Message
+
+client = GoogleClient(
+    api_key="your-gemini-api-key",  # or set GEMINI_API_KEY env var
+    model="gemini-2.5-flash",
+    cache_dir="./cache"
+)
+
+response = client.generate([
+    Message(role="user", content="What's the capital of France?")
+])
+print(response.content)
+print(f"Cost: ${response.tracking.cost_usd:.4f}")
+```
+
+### Using Anthropic Claude
+
+```python
+from seeds_clients import AnthropicClient, Message
+
+client = AnthropicClient(
+    api_key="your-anthropic-api-key",  # or set ANTHROPIC_API_KEY env var
+    model="claude-sonnet-4-20250514",
+    cache_dir="./cache"
+)
+
+response = client.generate([
+    Message(role="user", content="Explain the theory of relativity")
+])
+print(response.content)
+print(f"Cost: ${response.tracking.cost_usd:.4f}")
+```
+
 ### Structured Output
 
 ```python
@@ -217,14 +253,16 @@ seeds_clients/
 - [x] Cost tracking with pricing database (JSON-based, easily updatable)
 - [x] Structured outputs with Pydantic models
 - [x] Multimodal support (text + images)
-- [ ] Anthropic client (Claude 3.5 Sonnet, Claude 3 Opus)
-- [ ] Google GenAI client (Gemini Pro, Gemini Flash)
+- [x] Google GenAI client (Gemini 2.5, Gemini Pro, Gemini Flash)
+- [x] Anthropic client (Claude Sonnet 4, Claude 3.5 Sonnet, Claude 3 Opus)
 - [ ] Mistral client (Mistral Large, Mistral Medium)
-- [ ] Provider-specific response parsing
-- [ ] Error handling and retry logic
+- [x] Provider-specific response parsing
+- [x] Error handling and retry logic
 
 **Deliverables**:
 - ✅ OpenAI client with automatic cost tracking
+- ✅ Google GenAI client with structured outputs and multimodal
+- ✅ Anthropic client with structured outputs (via tool_use) and multimodal
 - ✅ JSON-based pricing configuration (easily updatable)
 - ✅ Structured outputs with response validation
 - Integration tests with real API calls (VCR-based)
@@ -298,7 +336,7 @@ seeds_clients/
 - [ ] Performance benchmarks
 
 **Deliverables**:
-- ✅ Full test suite (126 tests passing)
+- ✅ Full test suite (271 tests passing)
 - Complete documentation site
 - 10+ working examples
 

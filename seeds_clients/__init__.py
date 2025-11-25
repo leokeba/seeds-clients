@@ -10,6 +10,7 @@ from seeds_clients.core.exceptions import (
 )
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
 from seeds_clients.providers import (
+    AnthropicClient,
     BatchResult,
     GoogleClient,
     ModelGardenClient,
@@ -34,6 +35,7 @@ __all__ = [
     "ProviderError",
     "ValidationError",
     # Providers
+    "AnthropicClient",
     "GoogleClient",
     "OpenAIClient",
     "OpenRouterClient",

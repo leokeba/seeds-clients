@@ -2,7 +2,61 @@
   "_metadata": {
     "last_updated": "2025-11-25",
     "update_frequency_days": 30,
-    "source": "https://platform.openai.com/docs/pricing, https://ai.google.dev/gemini-api/docs/pricing"
+    "source": "https://platform.openai.com/docs/pricing, https://ai.google.dev/gemini-api/docs/pricing, https://www.anthropic.com/pricing"
+  },
+  "anthropic": {
+    "claude-opus-4-5-20250514": {
+      "input": 5.00,
+      "output": 25.00
+    },
+    "claude-sonnet-4-5-20250514": {
+      "input": 3.00,
+      "output": 15.00
+    },
+    "claude-haiku-4-5-20250514": {
+      "input": 1.00,
+      "output": 5.00
+    },
+    "claude-opus-4-5": {
+      "input": 5.00,
+      "output": 25.00
+    },
+    "claude-sonnet-4-5": {
+      "input": 3.00,
+      "output": 15.00
+    },
+    "claude-haiku-4-5": {
+      "input": 1.00,
+      "output": 5.00
+    },
+    "claude-sonnet-4": {
+      "input": 3.00,
+      "output": 15.00
+    },
+    "claude-3-7-sonnet": {
+      "input": 3.00,
+      "output": 15.00
+    },
+    "claude-3-5-sonnet": {
+      "input": 3.00,
+      "output": 15.00
+    },
+    "claude-3-5-haiku": {
+      "input": 0.80,
+      "output": 4.00
+    },
+    "claude-3-opus": {
+      "input": 15.00,
+      "output": 75.00
+    },
+    "claude-3-sonnet": {
+      "input": 3.00,
+      "output": 15.00
+    },
+    "claude-3-haiku": {
+      "input": 0.25,
+      "output": 1.25
+    }
   },
   "google": {
     "gemini-3-pro-preview": {
