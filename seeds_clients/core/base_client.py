@@ -24,6 +24,7 @@ class BaseClient(ABC):
         cache_ttl_hours: float | None = 24,
         enable_tracking: bool = True,
         tracking_method: str = "ecologits",
+        electricity_mix_zone: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize base client.
@@ -35,12 +36,15 @@ class BaseClient(ABC):
             cache_ttl_hours: Cache time-to-live in hours (None = no expiration)
             enable_tracking: Whether to enable carbon/cost tracking
             tracking_method: Tracking method ('ecologits', 'codecarbon', 'none')
+            electricity_mix_zone: ISO 3166-1 alpha-3 code for electricity mix
+                                 (e.g., 'FRA', 'USA', 'WOR'). Default is 'WOR' (World).
             **kwargs: Additional provider-specific arguments
         """
         self.model = model
         self.api_key = api_key
         self.enable_tracking = enable_tracking
         self.tracking_method = tracking_method
+        self.electricity_mix_zone = electricity_mix_zone or "WOR"
         self.kwargs = kwargs
 
         # Initialize cache if directory provided

@@ -55,6 +55,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         ttl_hours: float | None = 24.0,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        electricity_mix_zone: str | None = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -68,6 +69,8 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             ttl_hours: Cache TTL in hours. None for no expiration.
             max_tokens: Maximum completion tokens.
             temperature: Sampling temperature (0-2).
+            electricity_mix_zone: ISO 3166-1 alpha-3 code for electricity mix zone
+                                 (e.g., "FRA", "USA", "WOR"). Default is "WOR" (World).
             **kwargs: Additional arguments passed to BaseClient.
 
         Raises:
@@ -91,8 +94,12 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             api_key=resolved_api_key,
             cache_dir=cache_dir,
             ttl_hours=ttl_hours,
+            electricity_mix_zone=electricity_mix_zone,
             **kwargs
         )
+
+        # Set electricity mix zone for EcoLogits mixin
+        self._set_electricity_mix_zone(electricity_mix_zone)
 
         # HTTP client for API calls
         self._http_client = httpx.Client(
@@ -309,6 +316,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
                 model_name=model_name,
                 output_tokens=output_tokens,
                 request_latency=duration_seconds,
+                electricity_mix_zone=self.electricity_mix_zone,
             )
             if impacts:
                 result["_ecologits_impacts"] = impacts
@@ -343,7 +351,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             raw: Raw API response dict.
 
         Returns:
-            Parsed Response object with cost tracking.
+            Parsed Response object with cost and carbon tracking.
 
         Raises:
             ProviderError: If response format is invalid.
@@ -377,21 +385,38 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             ecologits_impacts = raw.get("_ecologits_impacts")
             duration_seconds = raw.get("_duration_seconds", 0.0)
 
-            energy_kwh, gwp_kgco2eq, tracking_method = self._extract_ecologits_metrics(
-                ecologits_impacts
-            )
+            # Extract full metrics from EcoLogits
+            metrics = self._extract_full_ecologits_metrics(ecologits_impacts)
 
             # Create tracking data with cost and carbon metrics
             tracking = TrackingData(
-                energy_kwh=energy_kwh,
-                gwp_kgco2eq=gwp_kgco2eq,
+                # Total metrics
+                energy_kwh=metrics.energy_kwh,
+                gwp_kgco2eq=metrics.gwp_kgco2eq,
+                adpe_kgsbeq=metrics.adpe_kgsbeq,
+                pe_mj=metrics.pe_mj,
+                # Cost
                 cost_usd=cost_usd,
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
+                # Metadata
                 provider="openai",
                 model=model_name,
-                tracking_method=tracking_method,
+                tracking_method=metrics.tracking_method,
+                electricity_mix_zone=self.electricity_mix_zone,
                 duration_seconds=duration_seconds,
+                # Usage phase breakdown
+                energy_usage_kwh=metrics.energy_usage_kwh,
+                gwp_usage_kgco2eq=metrics.gwp_usage_kgco2eq,
+                adpe_usage_kgsbeq=metrics.adpe_usage_kgsbeq,
+                pe_usage_mj=metrics.pe_usage_mj,
+                # Embodied phase breakdown
+                gwp_embodied_kgco2eq=metrics.gwp_embodied_kgco2eq,
+                adpe_embodied_kgsbeq=metrics.adpe_embodied_kgsbeq,
+                pe_embodied_mj=metrics.pe_embodied_mj,
+                # Status messages
+                ecologits_warnings=metrics.warnings,
+                ecologits_errors=metrics.errors,
             )
 
             # Extract optional fields

@@ -44,18 +44,36 @@ class Usage(BaseModel):
 class TrackingData(BaseModel):
     """Comprehensive tracking data for a request.
 
-    Includes both carbon/energy metrics and cost metrics.
+    Includes both carbon/energy metrics and cost metrics, with breakdown
+    into usage phase (electricity during inference) and embodied phase
+    (manufacturing, resource extraction, transportation).
+
+    Environmental Impact Metrics:
+    - energy_kwh: Total energy consumption
+    - gwp_kgco2eq: Global Warming Potential (carbon footprint)
+    - adpe_kgsbeq: Abiotic Depletion Potential (resource depletion)
+    - pe_mj: Primary Energy consumption
+
+    Cost Metrics:
+    - cost_usd: Total cost in US dollars
+    - prompt_tokens/completion_tokens: Token counts
+
+    See https://ecologits.ai/latest/tutorial/impacts/ for details on metrics.
     """
 
-    # Carbon metrics
-    energy_kwh: float = Field(ge=0, description="Energy consumption in kilowatt-hours")
-    gwp_kgco2eq: float = Field(ge=0, description="Global Warming Potential in kg CO2 equivalent")
+    # Carbon metrics - totals
+    energy_kwh: float = Field(ge=0, description="Total energy consumption in kilowatt-hours")
+    gwp_kgco2eq: float = Field(
+        ge=0, description="Total Global Warming Potential in kg CO2 equivalent"
+    )
     adpe_kgsbeq: float | None = Field(
         default=None,
         ge=0,
         description="Abiotic Depletion Potential (elements) in kg Sb equivalent",
     )
-    pe_mj: float | None = Field(default=None, ge=0, description="Primary Energy in megajoules")
+    pe_mj: float | None = Field(
+        default=None, ge=0, description="Primary Energy consumption in megajoules"
+    )
 
     # Cost metrics
     cost_usd: float = Field(ge=0, description="Cost in US dollars")
@@ -69,7 +87,8 @@ class TrackingData(BaseModel):
         description="Method used for carbon tracking"
     )
     electricity_mix_zone: str | None = Field(
-        default=None, description="Electricity mix zone code (e.g., 'FRA', 'USA')"
+        default=None,
+        description="ISO 3166-1 alpha-3 code for electricity mix zone (e.g., 'FRA', 'USA', 'WOR')",
     )
 
     # Timestamps
@@ -78,15 +97,37 @@ class TrackingData(BaseModel):
     )
     duration_seconds: float = Field(ge=0, description="Request duration in seconds")
 
-    # Additional energy breakdown (optional)
+    # Usage phase breakdown (electricity consumption during inference)
     energy_usage_kwh: float | None = Field(
-        default=None, ge=0, description="Energy from usage phase"
+        default=None, ge=0, description="Energy from usage phase in kWh"
     )
     gwp_usage_kgco2eq: float | None = Field(
-        default=None, ge=0, description="GWP from usage phase"
+        default=None, ge=0, description="GWP from usage phase in kgCO2eq"
     )
+    adpe_usage_kgsbeq: float | None = Field(
+        default=None, ge=0, description="ADPe from usage phase in kgSbeq"
+    )
+    pe_usage_mj: float | None = Field(
+        default=None, ge=0, description="PE from usage phase in MJ"
+    )
+
+    # Embodied phase breakdown (manufacturing, resource extraction, transport)
     gwp_embodied_kgco2eq: float | None = Field(
-        default=None, ge=0, description="GWP from embodied emissions"
+        default=None, ge=0, description="GWP from embodied phase in kgCO2eq"
+    )
+    adpe_embodied_kgsbeq: float | None = Field(
+        default=None, ge=0, description="ADPe from embodied phase in kgSbeq"
+    )
+    pe_embodied_mj: float | None = Field(
+        default=None, ge=0, description="PE from embodied phase in MJ"
+    )
+
+    # EcoLogits status messages
+    ecologits_warnings: list[str] | None = Field(
+        default=None, description="Warning messages from EcoLogits calculation"
+    )
+    ecologits_errors: list[str] | None = Field(
+        default=None, description="Error messages from EcoLogits calculation"
     )
 
 

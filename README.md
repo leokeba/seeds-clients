@@ -30,7 +30,8 @@ client = OpenAIClient(
     api_key="your-api-key",
     model="gpt-4o",
     cache_dir="./cache",
-    enable_tracking=True
+    enable_tracking=True,
+    electricity_mix_zone="WOR"  # World average (default)
 )
 
 # Generate text
@@ -41,6 +42,10 @@ print(response.content)
 print(f"Cost: ${response.tracking.cost_usd:.4f}")
 print(f"Carbon: {response.tracking.gwp_kgco2eq:.6f} kgCO2eq")
 print(f"Energy: {response.tracking.energy_kwh:.6f} kWh")
+
+# Detailed breakdown available
+print(f"Usage phase GWP: {response.tracking.gwp_usage_kgco2eq:.6f} kgCO2eq")
+print(f"Embodied phase GWP: {response.tracking.gwp_embodied_kgco2eq:.6f} kgCO2eq")
 ```
 
 ### Structured Output
@@ -190,14 +195,16 @@ seeds_clients/
 
 **Goals**: Integrate carbon and cost tracking
 
-- [ ] EcoLogits integration
+- [x] EcoLogits integration
   - Automatic impact calculation per request
   - Model-based carbon estimates
   - Electricity mix zone configuration
+  - Full metrics extraction (energy, GWP, ADPe, PE)
+  - Usage vs embodied phase breakdown
 - [ ] CodeCarbon integration (optional)
   - Hardware-measured emissions
   - Server-side tracking support
-- [ ] Cost tracking engine
+- [x] Cost tracking engine
   - Pricing database for all providers
   - Per-request cost calculation
   - Cumulative cost aggregation
@@ -319,10 +326,10 @@ def _compute_cache_key(
 class TrackingData(BaseModel):
     """Unified tracking data structure"""
     
-    # Carbon metrics
+    # Carbon metrics - totals
     energy_kwh: float
     gwp_kgco2eq: float  # Global Warming Potential
-    adpe_kgsbeq: float | None = None  # Abiotic Depletion
+    adpe_kgsbeq: float | None = None  # Abiotic Depletion Potential
     pe_mj: float | None = None  # Primary Energy
     
     # Cost metrics
@@ -333,12 +340,27 @@ class TrackingData(BaseModel):
     # Metadata
     provider: str
     model: str
-    tracking_method: str  # "ecologits" or "codecarbon"
+    tracking_method: str  # "ecologits" or "codecarbon" or "none"
     electricity_mix_zone: str | None = None
     
     # Timestamps
     measured_at: datetime
     duration_seconds: float
+    
+    # Usage phase breakdown (from electricity consumption)
+    energy_usage_kwh: float | None = None
+    gwp_usage_kgco2eq: float | None = None
+    adpe_usage_kgsbeq: float | None = None
+    pe_usage_mj: float | None = None
+    
+    # Embodied phase breakdown (from manufacturing, etc.)
+    gwp_embodied_kgco2eq: float | None = None
+    adpe_embodied_kgsbeq: float | None = None
+    pe_embodied_mj: float | None = None
+    
+    # Status messages from EcoLogits
+    ecologits_warnings: list[str] | None = None
+    ecologits_errors: list[str] | None = None
 ```
 
 ## 🌍 Carbon Tracking Methods
@@ -355,6 +377,21 @@ client = OpenAIClient(
     tracking_method="ecologits",
     electricity_mix_zone="WOR"  # World average, or specific region
 )
+
+response = client.generate([Message(role="user", content="Hello!")])
+
+# Access tracking data
+print(f"Energy: {response.tracking.energy_kwh} kWh")
+print(f"Carbon: {response.tracking.gwp_kgco2eq} kgCO2eq")
+print(f"Cost: ${response.tracking.cost_usd}")
+
+# Detailed breakdown
+print(f"Usage phase GWP: {response.tracking.gwp_usage_kgco2eq} kgCO2eq")
+print(f"Embodied phase GWP: {response.tracking.gwp_embodied_kgco2eq} kgCO2eq")
+
+# Check for any warnings from EcoLogits
+if response.tracking.ecologits_warnings:
+    print(f"Warnings: {response.tracking.ecologits_warnings}")
 ```
 
 **Pros**:
