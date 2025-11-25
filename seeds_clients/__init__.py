@@ -11,6 +11,7 @@ from seeds_clients.core.exceptions import (
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
 from seeds_clients.providers import (
     BatchResult,
+    GoogleClient,
     ModelGardenClient,
     OpenAIClient,
     OpenRouterClient,
@@ -33,6 +34,7 @@ __all__ = [
     "ProviderError",
     "ValidationError",
     # Providers
+    "GoogleClient",
     "OpenAIClient",
     "OpenRouterClient",
     "OpenRouterCostData",

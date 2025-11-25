@@ -1,8 +1,54 @@
 {
   "_metadata": {
-    "last_updated": "2024-11-24",
+    "last_updated": "2025-11-25",
     "update_frequency_days": 30,
-    "source": "https://platform.openai.com/docs/pricing"
+    "source": "https://platform.openai.com/docs/pricing, https://ai.google.dev/gemini-api/docs/pricing"
+  },
+  "google": {
+    "gemini-3-pro-preview": {
+      "input": 2.00,
+      "output": 12.00
+    },
+    "gemini-3-pro": {
+      "input": 2.00,
+      "output": 12.00
+    },
+    "gemini-2.5-pro": {
+      "input": 1.25,
+      "output": 10.00
+    },
+    "gemini-2.5-pro-preview": {
+      "input": 1.25,
+      "output": 10.00
+    },
+    "gemini-2.5-flash": {
+      "input": 0.30,
+      "output": 2.50
+    },
+    "gemini-2.5-flash-preview": {
+      "input": 0.30,
+      "output": 2.50
+    },
+    "gemini-2.5-flash-lite": {
+      "input": 0.10,
+      "output": 0.40
+    },
+    "gemini-2.5-flash-lite-preview": {
+      "input": 0.10,
+      "output": 0.40
+    },
+    "gemini-2.0-flash": {
+      "input": 0.10,
+      "output": 0.40
+    },
+    "gemini-2.0-flash-lite": {
+      "input": 0.075,
+      "output": 0.30
+    },
+    "gemini-embedding-001": {
+      "input": 0.15,
+      "output": 0.00
+    }
   },
   "openai": {
     "gpt-5.1": {
