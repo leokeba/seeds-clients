@@ -684,6 +684,65 @@ class BaseClient(ABC):
         """
         self._cumulative_tracking.reset()
 
+    def export_boamps_report(
+        self,
+        output_path: str | Path,
+        *,
+        publisher_name: str | None = None,
+        task_description: str | None = None,
+        task_family: str = "textGeneration",
+        include_summary: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Export a BoAmps-compliant energy consumption report.
+
+        Generates a standardized JSON report following the BoAmps format
+        for energy consumption of LLM inference tasks.
+
+        See: https://github.com/Boavizta/BoAmps
+
+        Args:
+            output_path: Path where to save the JSON report.
+            publisher_name: Name of the organization publishing the report.
+            task_description: Free-form description of the task.
+            task_family: Family of the task (textGeneration, imageClassification, etc.).
+            include_summary: Whether to print a summary to console.
+            **kwargs: Additional arguments passed to BoAmpsReporter.
+
+        Returns:
+            BoAmpsReport object containing all energy consumption data.
+
+        Example:
+            ```python
+            client = OpenAIClient(model="gpt-4.1", cache_dir="./cache")
+
+            # Make some requests
+            for i in range(10):
+                client.generate([Message(role="user", content=f"Question {i}")])
+
+            # Export BoAmps report
+            report = client.export_boamps_report(
+                "energy_report.json",
+                publisher_name="My Organization",
+                task_description="LLM inference for question answering",
+            )
+
+            # Access report data
+            print(f"Total energy: {report.measures[0].powerConsumption} kWh")
+            ```
+        """
+        from seeds_clients.tracking.boamps_reporter import export_boamps_report
+
+        return export_boamps_report(
+            self,
+            output_path,
+            publisher_name=publisher_name,
+            task_description=task_description,
+            task_family=task_family,
+            include_summary=include_summary,
+            **kwargs,
+        )
+
     def close(self) -> None:
         """Close client and clean up resources."""
         if self.cache:

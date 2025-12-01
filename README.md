@@ -201,12 +201,51 @@ client.reset_cumulative_tracking()
 
 ### Export BoAmps Report
 
+Export standardized energy consumption reports following the [BoAmps format](https://github.com/Boavizta/BoAmps):
+
 ```python
-# Get standardized energy consumption report
+# Make some requests first
+for i in range(10):
+    client.generate([Message(role="user", content=f"Question {i}")])
+
+# Export BoAmps-compliant report
 report = client.export_boamps_report(
     output_path="energy_report.json",
-    include_calibration=True
+    publisher_name="My Organization",
+    task_description="LLM inference for question answering",
 )
+
+# Access report data programmatically
+print(f"Total energy: {report.measures[0].powerConsumption} kWh")
+print(f"Requests: {report.task.nbRequest}")
+print(f"Model: {report.task.algorithms[0].foundationModelName}")
+```
+
+The report includes:
+- **Header**: Report metadata, licensing, publisher information
+- **Task**: Algorithm details, dataset info, number of requests
+- **Measures**: Energy consumption, tracking method, calibration data
+- **Infrastructure**: Cloud provider, hardware components
+- **Environment**: Country/region, power source
+- **System/Software**: OS and Python version info
+
+```python
+# You can also use the reporter class directly for more control
+from seeds_clients.tracking import BoAmpsReporter
+
+reporter = BoAmpsReporter(
+    client=client,
+    publisher_name="Research Lab",
+    project_name="AI Sustainability Study",
+    task_family="textGeneration",
+    infrastructure_type="publicCloud",
+    quality="high",
+    calibration_energy_kwh=0.0001,  # Optional calibration data
+    calibration_duration_seconds=60.0,
+)
+
+report = reporter.generate_report()
+report.save("detailed_report.json")
 ```
 
 ## 📦 Installation
