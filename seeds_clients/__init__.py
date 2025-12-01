@@ -8,7 +8,13 @@ from seeds_clients.core.exceptions import (
     SeedsClientError,
     ValidationError,
 )
-from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.core.types import (
+    CumulativeTracking,
+    Message,
+    Response,
+    TrackingData,
+    Usage,
+)
 from seeds_clients.providers import (
     AnthropicClient,
     BatchResult,
@@ -23,6 +29,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     # Core types
+    "CumulativeTracking",
     "Message",
     "Response",
     "Usage",

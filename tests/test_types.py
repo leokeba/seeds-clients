@@ -6,7 +6,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.core.types import (
+    CumulativeTracking,
+    Message,
+    Response,
+    TrackingData,
+    Usage,
+)
 
 
 class TestMessage:
@@ -171,3 +177,269 @@ class TestResponse:
             cached=True,
         )
         assert response.cached
+
+
+class TestCumulativeTracking:
+    """Tests for CumulativeTracking type."""
+
+    def test_default_values(self) -> None:
+        """Test default values are all zero."""
+        tracking = CumulativeTracking()
+        
+        # Request counts
+        assert tracking.api_request_count == 0
+        assert tracking.cached_request_count == 0
+        
+        # API metrics
+        assert tracking.api_energy_kwh == 0.0
+        assert tracking.api_gwp_kgco2eq == 0.0
+        assert tracking.api_cost_usd == 0.0
+        assert tracking.api_prompt_tokens == 0
+        assert tracking.api_completion_tokens == 0
+        
+        # Cached metrics
+        assert tracking.cached_energy_kwh == 0.0
+        assert tracking.cached_gwp_kgco2eq == 0.0
+        assert tracking.cached_cost_usd == 0.0
+
+    def test_total_properties(self) -> None:
+        """Test computed total properties."""
+        tracking = CumulativeTracking(
+            api_request_count=3,
+            cached_request_count=2,
+            api_energy_kwh=0.003,
+            cached_energy_kwh=0.002,
+            api_gwp_kgco2eq=0.0015,
+            cached_gwp_kgco2eq=0.001,
+            api_cost_usd=0.06,
+            cached_cost_usd=0.04,
+            api_prompt_tokens=300,
+            cached_prompt_tokens=200,
+            api_completion_tokens=150,
+            cached_completion_tokens=100,
+        )
+        
+        assert tracking.total_request_count == 5
+        assert tracking.total_energy_kwh == pytest.approx(0.005)
+        assert tracking.total_gwp_kgco2eq == pytest.approx(0.0025)
+        assert tracking.total_cost_usd == pytest.approx(0.10)
+        assert tracking.total_prompt_tokens == 500
+        assert tracking.total_completion_tokens == 250
+
+    def test_cache_hit_rate(self) -> None:
+        """Test cache hit rate calculation."""
+        # No requests
+        tracking = CumulativeTracking()
+        assert tracking.cache_hit_rate == 0.0
+        
+        # Some cached
+        tracking = CumulativeTracking(
+            api_request_count=3,
+            cached_request_count=2,
+        )
+        assert tracking.cache_hit_rate == pytest.approx(0.4)
+        
+        # All cached
+        tracking = CumulativeTracking(
+            api_request_count=0,
+            cached_request_count=5,
+        )
+        assert tracking.cache_hit_rate == 1.0
+
+    def test_emissions_avoided(self) -> None:
+        """Test emissions avoided property."""
+        tracking = CumulativeTracking(
+            cached_gwp_kgco2eq=0.005,
+        )
+        assert tracking.emissions_avoided_kgco2eq == 0.005
+
+    def test_usage_embodied_breakdown(self) -> None:
+        """Test usage vs embodied phase breakdown."""
+        tracking = CumulativeTracking(
+            api_gwp_usage_kgco2eq=0.0008,
+            api_gwp_embodied_kgco2eq=0.0002,
+            cached_gwp_usage_kgco2eq=0.0004,
+            cached_gwp_embodied_kgco2eq=0.0001,
+        )
+        
+        assert tracking.total_gwp_usage_kgco2eq == pytest.approx(0.0012)
+        assert tracking.total_gwp_embodied_kgco2eq == pytest.approx(0.0003)
+
+    def test_accumulate_api_request(self) -> None:
+        """Test accumulating an API request."""
+        tracking = CumulativeTracking()
+        
+        request_tracking = TrackingData(
+            energy_kwh=0.001,
+            gwp_kgco2eq=0.0005,
+            cost_usd=0.02,
+            prompt_tokens=100,
+            completion_tokens=50,
+            provider="openai",
+            model="gpt-4.1",
+            tracking_method="ecologits",
+            duration_seconds=1.5,
+            gwp_usage_kgco2eq=0.0003,
+            gwp_embodied_kgco2eq=0.0002,
+            energy_usage_kwh=0.0008,
+        )
+        
+        tracking.accumulate(request_tracking, cached=False)
+        
+        assert tracking.api_request_count == 1
+        assert tracking.api_energy_kwh == 0.001
+        assert tracking.api_gwp_kgco2eq == 0.0005
+        assert tracking.api_cost_usd == 0.02
+        assert tracking.api_prompt_tokens == 100
+        assert tracking.api_completion_tokens == 50
+        assert tracking.api_gwp_usage_kgco2eq == 0.0003
+        assert tracking.api_gwp_embodied_kgco2eq == 0.0002
+        assert tracking.api_energy_usage_kwh == 0.0008
+        
+        # Cached should be unchanged
+        assert tracking.cached_request_count == 0
+        assert tracking.cached_gwp_kgco2eq == 0.0
+
+    def test_accumulate_cached_request(self) -> None:
+        """Test accumulating a cached request."""
+        tracking = CumulativeTracking()
+        
+        request_tracking = TrackingData(
+            energy_kwh=0.001,
+            gwp_kgco2eq=0.0005,
+            cost_usd=0.02,
+            prompt_tokens=100,
+            completion_tokens=50,
+            provider="openai",
+            model="gpt-4.1",
+            tracking_method="ecologits",
+            duration_seconds=1.5,
+            gwp_usage_kgco2eq=0.0003,
+            gwp_embodied_kgco2eq=0.0002,
+            energy_usage_kwh=0.0008,
+        )
+        
+        tracking.accumulate(request_tracking, cached=True)
+        
+        assert tracking.cached_request_count == 1
+        assert tracking.cached_energy_kwh == 0.001
+        assert tracking.cached_gwp_kgco2eq == 0.0005
+        assert tracking.cached_cost_usd == 0.02
+        assert tracking.cached_prompt_tokens == 100
+        assert tracking.cached_completion_tokens == 50
+        assert tracking.cached_gwp_usage_kgco2eq == 0.0003
+        assert tracking.cached_gwp_embodied_kgco2eq == 0.0002
+        assert tracking.cached_energy_usage_kwh == 0.0008
+        
+        # API should be unchanged
+        assert tracking.api_request_count == 0
+        assert tracking.api_gwp_kgco2eq == 0.0
+
+    def test_accumulate_multiple_requests(self) -> None:
+        """Test accumulating multiple requests."""
+        tracking = CumulativeTracking()
+        
+        # Create tracking data for requests
+        def make_tracking(energy: float, gwp: float, cost: float) -> TrackingData:
+            return TrackingData(
+                energy_kwh=energy,
+                gwp_kgco2eq=gwp,
+                cost_usd=cost,
+                prompt_tokens=100,
+                completion_tokens=50,
+                provider="openai",
+                model="gpt-4.1",
+                tracking_method="ecologits",
+                duration_seconds=1.0,
+            )
+        
+        # Accumulate API requests
+        tracking.accumulate(make_tracking(0.001, 0.0005, 0.02), cached=False)
+        tracking.accumulate(make_tracking(0.002, 0.001, 0.03), cached=False)
+        
+        # Accumulate cached request
+        tracking.accumulate(make_tracking(0.001, 0.0005, 0.02), cached=True)
+        
+        assert tracking.api_request_count == 2
+        assert tracking.cached_request_count == 1
+        assert tracking.total_request_count == 3
+        
+        assert tracking.api_energy_kwh == pytest.approx(0.003)
+        assert tracking.api_gwp_kgco2eq == pytest.approx(0.0015)
+        assert tracking.api_cost_usd == pytest.approx(0.05)
+        
+        assert tracking.cached_energy_kwh == pytest.approx(0.001)
+        assert tracking.cached_gwp_kgco2eq == pytest.approx(0.0005)
+        
+        assert tracking.total_gwp_kgco2eq == pytest.approx(0.002)
+
+    def test_accumulate_with_none_optional_fields(self) -> None:
+        """Test accumulating when optional fields are None."""
+        tracking = CumulativeTracking()
+        
+        # Tracking without optional breakdown fields
+        request_tracking = TrackingData(
+            energy_kwh=0.001,
+            gwp_kgco2eq=0.0005,
+            cost_usd=0.02,
+            prompt_tokens=100,
+            completion_tokens=50,
+            provider="openai",
+            model="gpt-4.1",
+            tracking_method="ecologits",
+            duration_seconds=1.5,
+            # gwp_usage_kgco2eq=None (default)
+            # gwp_embodied_kgco2eq=None (default)
+        )
+        
+        tracking.accumulate(request_tracking, cached=False)
+        
+        # Should not crash and should leave breakdown at 0
+        assert tracking.api_gwp_usage_kgco2eq == 0.0
+        assert tracking.api_gwp_embodied_kgco2eq == 0.0
+
+    def test_reset(self) -> None:
+        """Test resetting cumulative tracking."""
+        tracking = CumulativeTracking(
+            api_request_count=5,
+            cached_request_count=3,
+            api_energy_kwh=0.005,
+            api_gwp_kgco2eq=0.0025,
+            api_cost_usd=0.10,
+            cached_energy_kwh=0.003,
+            cached_gwp_kgco2eq=0.0015,
+        )
+        
+        tracking.reset()
+        
+        assert tracking.api_request_count == 0
+        assert tracking.cached_request_count == 0
+        assert tracking.api_energy_kwh == 0.0
+        assert tracking.api_gwp_kgco2eq == 0.0
+        assert tracking.api_cost_usd == 0.0
+        assert tracking.cached_energy_kwh == 0.0
+        assert tracking.cached_gwp_kgco2eq == 0.0
+
+    def test_repr(self) -> None:
+        """Test string representation."""
+        tracking = CumulativeTracking(
+            api_request_count=3,
+            cached_request_count=2,
+            api_gwp_kgco2eq=0.0015,
+            cached_gwp_kgco2eq=0.001,
+            api_gwp_usage_kgco2eq=0.001,
+            api_gwp_embodied_kgco2eq=0.0005,
+            cached_gwp_usage_kgco2eq=0.0006,
+            cached_gwp_embodied_kgco2eq=0.0004,
+            api_cost_usd=0.05,
+            cached_cost_usd=0.03,
+        )
+        
+        repr_str = repr(tracking)
+        assert "requests=5" in repr_str
+        assert "api=3" in repr_str
+        assert "cached=2" in repr_str
+        assert "gwp=" in repr_str
+        assert "usage=" in repr_str
+        assert "embodied=" in repr_str
+        assert "cost=$" in repr_str

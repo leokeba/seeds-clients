@@ -19,6 +19,7 @@ A modern Python library providing unified LLM clients with integrated carbon imp
 - 🖼️ **Multimodal Support** for text and image inputs
 - 🔧 **Structured Outputs** with Pydantic model validation
 - 📈 **Batch Processing** with parallel execution and aggregated tracking
+- 📊 **Cumulative Tracking** across client lifecycle with API/cached separation
 
 ## 🚀 Quick Start
 
@@ -156,6 +157,48 @@ async def main():
 asyncio.run(main())
 ```
 
+### Cumulative Tracking
+
+Track total emissions and costs across a client's lifecycle, with separate tracking for API calls vs cached requests:
+
+```python
+from seeds_clients import OpenAIClient, Message
+
+client = OpenAIClient(
+    api_key="your-api-key",
+    model="gpt-4.1",
+    cache_dir="./cache"
+)
+
+# Make several requests
+for question in ["What is AI?", "What is ML?", "What is AI?"]:  # Last one cached
+    client.generate([Message(role="user", content=question)])
+
+# Get cumulative tracking
+tracking = client.cumulative_tracking
+
+# Request counts
+print(f"Total requests: {tracking.total_request_count}")
+print(f"API requests: {tracking.api_request_count}")
+print(f"Cached requests: {tracking.cached_request_count}")
+print(f"Cache hit rate: {tracking.cache_hit_rate:.1%}")
+
+# Emissions breakdown
+print(f"Total emissions: {tracking.total_gwp_kgco2eq:.6f} kgCO2eq")
+print(f"API emissions: {tracking.api_gwp_kgco2eq:.6f} kgCO2eq")
+print(f"Avoided emissions (cached): {tracking.emissions_avoided_kgco2eq:.6f} kgCO2eq")
+
+# Usage vs Embodied phase breakdown
+print(f"Usage phase: {tracking.total_gwp_usage_kgco2eq:.6f} kgCO2eq")
+print(f"Embodied phase: {tracking.total_gwp_embodied_kgco2eq:.6f} kgCO2eq")
+
+# Costs
+print(f"Total cost: ${tracking.total_cost_usd:.4f}")
+
+# Reset tracking for a new session
+client.reset_cumulative_tracking()
+```
+
 ### Export BoAmps Report
 
 ```python
@@ -285,6 +328,11 @@ seeds_clients/
   - Pricing database for all providers
   - Per-request cost calculation
   - Cumulative cost aggregation
+- [x] Cumulative tracking across client lifecycle
+  - Separate API vs cached request tracking
+  - Usage vs embodied phase breakdown
+  - Emissions avoided calculation
+  - Compatible with both EcoLogits and CodeCarbon
 - [ ] BoAmps reporter
   - Schema-compliant report generation
   - Hardware/software metadata
@@ -440,6 +488,36 @@ class TrackingData(BaseModel):
     # Status messages from EcoLogits
     ecologits_warnings: list[str] | None = None
     ecologits_errors: list[str] | None = None
+
+
+class CumulativeTracking(BaseModel):
+    """Aggregated tracking across client lifecycle"""
+    
+    # Request counts
+    api_request_count: int = 0
+    cached_request_count: int = 0
+    
+    # API requests (actual emissions)
+    api_energy_kwh: float = 0.0
+    api_gwp_kgco2eq: float = 0.0
+    api_cost_usd: float = 0.0
+    api_gwp_usage_kgco2eq: float = 0.0
+    api_gwp_embodied_kgco2eq: float = 0.0
+    
+    # Cached requests (avoided emissions)
+    cached_energy_kwh: float = 0.0
+    cached_gwp_kgco2eq: float = 0.0
+    cached_cost_usd: float = 0.0
+    
+    # Computed properties
+    @property
+    def total_request_count(self) -> int: ...
+    @property
+    def total_gwp_kgco2eq(self) -> float: ...
+    @property
+    def cache_hit_rate(self) -> float: ...
+    @property
+    def emissions_avoided_kgco2eq(self) -> float: ...
 ```
 
 ## 🌍 Carbon Tracking Methods

@@ -12,6 +12,7 @@ from seeds_clients.core.exceptions import (
     ValidationError,
 )
 from seeds_clients.core.types import (
+    CumulativeTracking,
     Message,
     Response,
     TrackingData,
@@ -24,6 +25,7 @@ __all__ = [
     "BatchResult",
     "CacheManager",
     # Types
+    "CumulativeTracking",
     "Message",
     "Response",
     "TrackingData",

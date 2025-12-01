@@ -500,3 +500,146 @@ class TestModelGardenClientIntegration:
             assert tracking.cpu_power_watts == 50.0
             assert tracking.gpu_power_watts == 200.0
             assert tracking.gpu_energy_kwh == pytest.approx(0.000035, rel=1e-3)
+
+
+class TestModelGardenCumulativeTracking:
+    """Tests for cumulative tracking with ModelGardenClient (CodeCarbon)."""
+
+    @pytest.fixture
+    def client(self):
+        """Create a Model Garden client instance."""
+        return ModelGardenClient()
+
+    @pytest.fixture
+    def sample_response_with_codecarbon(self):
+        """Create a sample API response with x_carbon_trace."""
+        return {
+            "id": "chatcmpl-123",
+            "model": "Qwen/Qwen2.5-3B-Instruct",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello! How can I help you?",
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 8,
+                "total_tokens": 18,
+            },
+            "x_carbon_trace": {
+                "emissions_g_co2": 0.52,  # 0.00052 kg
+                "energy_consumed_wh": 1.5,  # 0.0015 kWh
+                "cpu_energy_wh": 0.5,
+                "gpu_energy_wh": 0.8,
+                "ram_energy_wh": 0.2,
+                "cpu_power_watts": 85.0,
+                "gpu_power_watts": 250.0,
+                "ram_power_watts": 15.0,
+                "duration_seconds": 0.5,
+                "measured": True,
+                "tracking_active": True,
+            },
+        }
+
+    def test_client_has_cumulative_tracking(self, client):
+        """Test that ModelGardenClient has cumulative tracking initialized."""
+        from seeds_clients.core.types import CumulativeTracking
+
+        assert hasattr(client, "cumulative_tracking")
+        assert isinstance(client.cumulative_tracking, CumulativeTracking)
+
+    def test_codecarbon_request_accumulates(self, client, sample_response_with_codecarbon):
+        """Test that CodeCarbon responses accumulate correctly."""
+        mock_response = Mock()
+        mock_response.json.return_value = sample_response_with_codecarbon
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(client._http_client, "post", return_value=mock_response):
+            response = client.generate(
+                messages=[Message(role="user", content="Hello!")],
+                use_cache=False,
+            )
+
+            tracking = client.cumulative_tracking
+            assert tracking.api_request_count == 1
+            assert tracking.cached_request_count == 0
+            assert tracking.api_gwp_kgco2eq == pytest.approx(0.00052)
+            assert tracking.api_energy_kwh == pytest.approx(0.0015)
+
+            # CodeCarbon tracks usage phase only
+            assert tracking.api_gwp_usage_kgco2eq == pytest.approx(0.00052)
+            assert tracking.api_energy_usage_kwh == pytest.approx(0.0015)
+
+            # Embodied should be 0 (CodeCarbon doesn't track it)
+            assert tracking.api_gwp_embodied_kgco2eq == 0.0
+
+    def test_multiple_codecarbon_requests_accumulate(self, client, sample_response_with_codecarbon):
+        """Test that multiple CodeCarbon requests accumulate correctly."""
+        mock_response = Mock()
+        mock_response.json.return_value = sample_response_with_codecarbon
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(client._http_client, "post", return_value=mock_response):
+            # Make 3 requests
+            for i in range(3):
+                client.generate(
+                    messages=[Message(role="user", content=f"Hello {i}!")],
+                    use_cache=False,
+                )
+
+            tracking = client.cumulative_tracking
+            assert tracking.api_request_count == 3
+            assert tracking.api_gwp_kgco2eq == pytest.approx(0.00156)  # 0.00052 * 3
+            assert tracking.api_energy_kwh == pytest.approx(0.0045)  # 0.0015 * 3
+            assert tracking.api_prompt_tokens == 30  # 10 * 3
+
+    def test_reset_cumulative_tracking(self, client, sample_response_with_codecarbon):
+        """Test resetting cumulative tracking for ModelGardenClient."""
+        mock_response = Mock()
+        mock_response.json.return_value = sample_response_with_codecarbon
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(client._http_client, "post", return_value=mock_response):
+            client.generate(
+                messages=[Message(role="user", content="Hello!")],
+                use_cache=False,
+            )
+
+            # Verify we have data
+            assert client.cumulative_tracking.api_request_count == 1
+            assert client.cumulative_tracking.api_gwp_kgco2eq > 0
+
+            # Reset
+            client.reset_cumulative_tracking()
+
+            # Verify reset
+            assert client.cumulative_tracking.api_request_count == 0
+            assert client.cumulative_tracking.api_gwp_kgco2eq == 0.0
+
+    @pytest.mark.asyncio
+    async def test_async_codecarbon_request_accumulates(self, client, sample_response_with_codecarbon):
+        """Test that async CodeCarbon requests accumulate correctly."""
+        mock_async_response = Mock()
+        mock_async_response.json.return_value = sample_response_with_codecarbon
+        mock_async_response.raise_for_status = Mock()
+
+        mock_async_client = Mock()
+        mock_async_client.post = AsyncMock(return_value=mock_async_response)
+
+        with patch.object(client, "_get_async_client", return_value=mock_async_client):
+            response = await client.agenerate(
+                messages=[Message(role="user", content="Hello!")],
+                use_cache=False,
+            )
+
+            tracking = client.cumulative_tracking
+            assert tracking.api_request_count == 1
+            assert tracking.api_gwp_kgco2eq == pytest.approx(0.00052)
+            assert tracking.api_gwp_usage_kgco2eq == pytest.approx(0.00052)
+            assert tracking.api_gwp_embodied_kgco2eq == 0.0
+

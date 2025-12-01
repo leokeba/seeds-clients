@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from seeds_clients.core.batch import BatchResult
 from seeds_clients.core.cache import CacheManager
 from seeds_clients.core.exceptions import ValidationError
-from seeds_clients.core.types import Message, Response, TrackingData
+from seeds_clients.core.types import CumulativeTracking, Message, Response, TrackingData
 
 # Type variable for structured outputs
 T = TypeVar("T", bound=BaseModel)
@@ -61,6 +61,9 @@ class BaseClient(ABC):
         self.cache: CacheManager | None = None
         if cache_dir:
             self.cache = CacheManager(cache_dir, ttl_hours=cache_ttl_hours)
+
+        # Initialize cumulative tracking
+        self._cumulative_tracking = CumulativeTracking()
 
         # Initialize tracking (will be set up by subclasses)
         self.tracker: Any = None
@@ -191,6 +194,9 @@ class BaseClient(ABC):
                 # Parse structured output if response_format was provided
                 if response_format is not None and response.content:
                     response = self._parse_structured_output(response, response_format)
+                # Accumulate cached tracking data
+                if response.tracking is not None:
+                    self._cumulative_tracking.accumulate(response.tracking, cached=True)
                 return response
 
         # Call API with timing
@@ -216,6 +222,10 @@ class BaseClient(ABC):
                 "duration_seconds": duration,
             }
             self.cache.set(cache_key, raw_response, metadata)
+
+        # Accumulate API tracking data
+        if response.tracking is not None:
+            self._cumulative_tracking.accumulate(response.tracking, cached=False)
 
         # Parse structured output if response_format was provided
         if response_format is not None and response.content:
@@ -283,6 +293,9 @@ class BaseClient(ABC):
                 # Parse structured output if response_format was provided
                 if response_format is not None and response.content:
                     response = self._parse_structured_output(response, response_format)
+                # Accumulate cached tracking data
+                if response.tracking is not None:
+                    self._cumulative_tracking.accumulate(response.tracking, cached=True)
                 return response
 
         # Call API with timing
@@ -308,6 +321,10 @@ class BaseClient(ABC):
                 "duration_seconds": duration,
             }
             self.cache.set(cache_key, raw_response, metadata)
+
+        # Accumulate API tracking data
+        if response.tracking is not None:
+            self._cumulative_tracking.accumulate(response.tracking, cached=False)
 
         # Parse structured output if response_format was provided
         if response_format is not None and response.content:
@@ -606,6 +623,66 @@ class BaseClient(ABC):
         if self.cache:
             return self.cache.stats()
         return {"enabled": False}
+
+    @property
+    def cumulative_tracking(self) -> CumulativeTracking:
+        """Get cumulative tracking data for this client's lifecycle.
+
+        Returns:
+            CumulativeTracking object with aggregated emissions, costs, and tokens
+            separated into API requests vs cached requests, and usage vs embodied phases.
+
+        Example:
+            ```python
+            client = OpenAIClient(model="gpt-4.1", cache_dir="./cache")
+
+            # Make some requests
+            response1 = client.generate([Message(role="user", content="Hello")])
+            response2 = client.generate([Message(role="user", content="Hello")])  # cached
+
+            # Access cumulative data
+            tracking = client.cumulative_tracking
+            print(f"Total GWP: {tracking.total_gwp_kgco2eq} kgCO2eq")
+            print(f"API GWP: {tracking.api_gwp_kgco2eq} kgCO2eq")
+            print(f"Avoided emissions: {tracking.emissions_avoided_kgco2eq} kgCO2eq")
+            print(f"Usage phase: {tracking.total_gwp_usage_kgco2eq} kgCO2eq")
+            print(f"Embodied phase: {tracking.total_gwp_embodied_kgco2eq} kgCO2eq")
+            ```
+        """
+        return self._cumulative_tracking
+
+    def get_cumulative_tracking(self) -> CumulativeTracking:
+        """Get cumulative tracking data for this client's lifecycle.
+
+        This is an alias for the cumulative_tracking property.
+
+        Returns:
+            CumulativeTracking object with aggregated emissions, costs, and tokens.
+        """
+        return self._cumulative_tracking
+
+    def reset_cumulative_tracking(self) -> None:
+        """Reset cumulative tracking data to zero.
+
+        Use this to start a new tracking period without creating a new client.
+
+        Example:
+            ```python
+            client = OpenAIClient(model="gpt-4.1")
+
+            # First batch of work
+            response1 = client.generate([Message(role="user", content="Task 1")])
+            print(f"Batch 1 emissions: {client.cumulative_tracking.total_gwp_kgco2eq}")
+
+            # Reset and start fresh
+            client.reset_cumulative_tracking()
+
+            # Second batch of work
+            response2 = client.generate([Message(role="user", content="Task 2")])
+            print(f"Batch 2 emissions: {client.cumulative_tracking.total_gwp_kgco2eq}")
+            ```
+        """
+        self._cumulative_tracking.reset()
 
     def close(self) -> None:
         """Close client and clean up resources."""
