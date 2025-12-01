@@ -1,0 +1,99 @@
+site_name: seeds-clients
+site_description: Unified LLM clients with carbon tracking and smart caching
+site_url: https://leokeba.github.io/seeds-clients
+repo_url: https://github.com/leokeba/seeds-clients
+repo_name: leokeba/seeds-clients
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: green
+      accent: light green
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            merge_init_into_class: true
+            show_signature_annotations: true
+            separate_signature: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - User Guides:
+    - OpenAI: guides/openai.md
+    - Anthropic: guides/anthropic.md
+    - Google: guides/google.md
+    - OpenRouter: guides/openrouter.md
+    - Batch Processing: guides/batch-processing.md
+    - Carbon Tracking: guides/carbon-tracking.md
+    - Caching: guides/caching.md
+    - Benchmarks: guides/benchmarks.md
+  - API Reference:
+    - Overview: api/index.md
+    - Core Types: api/types.md
+    - Providers:
+      - OpenAI: api/providers/openai.md
+      - Anthropic: api/providers/anthropic.md
+      - Google: api/providers/google.md
+      - OpenRouter: api/providers/openrouter.md
+    - Tracking:
+      - EcoLogits: api/tracking/ecologits.md
+      - CodeCarbon: api/tracking/codecarbon.md
+      - BoAmps Reporter: api/tracking/boamps.md
+  - Contributing: contributing.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/leokeba/seeds-clients
+
+copyright: Copyright &copy; 2024 Leo Keba

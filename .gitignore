@@ -57,3 +57,4 @@ reports/
 
 # Distribution / packaging
 *.whl
+site/

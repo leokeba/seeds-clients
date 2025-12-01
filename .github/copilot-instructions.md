@@ -11,8 +11,8 @@ This is a Python library providing unified LLM clients with carbon tracking, cos
 We use **uv** for all Python-related tasks:
 
 ```bash
-# Install dependencies
-uv sync
+# Install all dependencies (including dev group)
+uv sync --all-groups
 
 # Run Python scripts
 uv run python script.py
@@ -31,6 +31,30 @@ uv run python -m pytest tests/ --cov=seeds_clients
 - `pip install` - use `uv add` or `uv sync` instead
 - `python` directly - use `uv run python` instead
 - `pytest` directly - use `uv run python -m pytest` instead
+
+### Dependency Groups
+
+This project uses uv's `[dependency-groups]` feature (PEP 735) instead of `[project.optional-dependencies]` for dev dependencies:
+
+```toml
+# In pyproject.toml - this is the correct format:
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "ruff>=0.14",
+    # ... other dev dependencies
+]
+```
+
+**Important:** When adding dev dependencies, add them to `[dependency-groups].dev`, NOT to `[project.optional-dependencies].dev`. The latter is for optional runtime dependencies, while dependency-groups is for development tools.
+
+```bash
+# Add a dev dependency
+uv add --group dev package-name
+
+# Sync all groups including dev
+uv sync --all-groups
+```
 
 ### Environment Variables
 

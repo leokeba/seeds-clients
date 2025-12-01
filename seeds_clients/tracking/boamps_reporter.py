@@ -441,6 +441,9 @@ class BoAmpsReporter:
         ```
     """
 
+    infrastructure_type: Literal["publicCloud", "privateCloud", "onPremise", "other"]
+    quality: Literal["high", "medium", "low"]
+
     def __init__(
         self,
         client: Any,
