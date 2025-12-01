@@ -708,9 +708,9 @@ uv pip install -e ".[dev]"
 # Run tests
 pytest
 
-# Run linters
+# Run linters and type checker
 ruff check .
-mypy .
+ty check
 ```
 
 ## 📚 Resources

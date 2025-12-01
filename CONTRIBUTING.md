@@ -60,7 +60,7 @@ cp .env.example .env  # Add your API keys for integration tests
 
 For VS Code, we recommend these extensions:
 - Python
-- Pylance
+- ty (astral-sh.ty) - Primary type checker and language server
 - Ruff
 
 ## Making Changes
@@ -173,9 +173,13 @@ uv run ruff format seeds_clients/ tests/
 
 ### Type Hints
 
-We use type hints throughout the codebase. Check types with:
+We use type hints throughout the codebase. Check types with **ty** (our primary type checker):
 
 ```bash
+# Type check with ty (recommended)
+uv run ty check
+
+# Or with mypy (alternative)
 uv run mypy seeds_clients/
 ```
 
@@ -227,18 +231,23 @@ def calculate_cost(
    uv run ruff check seeds_clients/ tests/
    ```
 
-3. **Commit your changes** with a clear message:
+3. **Check for type errors**:
+   ```bash
+   uv run ty check
+   ```
+
+4. **Commit your changes** with a clear message:
    ```bash
    git add .
    git commit -m "Add feature: description of the feature"
    ```
 
-4. **Push to your fork**:
+5. **Push to your fork**:
    ```bash
    git push origin feature/your-feature-name
    ```
 
-5. **Create a Pull Request** on GitHub
+6. **Create a Pull Request** on GitHub
 
 ### Pull Request Guidelines
 

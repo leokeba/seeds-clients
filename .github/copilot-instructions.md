@@ -72,11 +72,15 @@ uv run python -m pytest tests/ -v --tb=short
 
 # Check for lint errors (optional but recommended)
 uv run ruff check seeds_clients/ tests/
+
+# Check for type errors with ty (recommended)
+uv run ty check
 ```
 
 - All tests must pass
 - No new lint errors should be introduced
 - Coverage should not decrease significantly
+- Type errors should be addressed (ty is the primary type checker)
 
 ### Test Categories
 
