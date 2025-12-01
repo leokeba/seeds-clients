@@ -357,12 +357,12 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
 
             # Try to extract more specific error info
             if hasattr(e, "message"):
-                error_msg = e.message  # type: ignore
+                error_msg = getattr(e, "message", error_msg)
             elif hasattr(e, "status_code"):
                 raise ProviderError(
                     f"Google Gemini API error: {error_msg}",
                     provider="google",
-                    status_code=e.status_code,  # type: ignore
+                    status_code=getattr(e, "status_code", None),
                 ) from e
 
             raise ProviderError(
@@ -438,12 +438,12 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
 
             # Try to extract more specific error info
             if hasattr(e, "message"):
-                error_msg = e.message  # type: ignore
+                error_msg = getattr(e, "message", error_msg)
             elif hasattr(e, "status_code"):
                 raise ProviderError(
                     f"Google Gemini API error: {error_msg}",
                     provider="google",
-                    status_code=e.status_code,  # type: ignore
+                    status_code=getattr(e, "status_code", None),
                 ) from e
 
             raise ProviderError(
@@ -735,12 +735,13 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
                 # Assume file path
                 image_path = Path(image)
                 if image_path.exists():
-                    mime_type, _ = mimetypes.guess_type(str(image_path))
+                    guessed_type, _ = mimetypes.guess_type(str(image_path))
+                    file_mime_type: str = guessed_type or "image/jpeg"
                     with open(image_path, "rb") as f:
                         image_bytes = f.read()
                     return types.Part.from_bytes(
                         data=image_bytes,
-                        mime_type=mime_type or "image/jpeg"
+                        mime_type=file_mime_type
                     )
                 return None
 

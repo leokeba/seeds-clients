@@ -62,18 +62,19 @@ class TestBoAmpsModels:
 
     def test_dataset_defaults(self) -> None:
         """Test Dataset model defaults."""
-        dataset = Dataset()
-        assert dataset.dataType == "text"
+        dataset = Dataset(dataUsage="input")
+        assert dataset.dataType == "token"  # Default for LLM is token
+        assert dataset.dataUsage == "input"
 
     def test_dataset_with_sizes(self) -> None:
-        """Test Dataset with input/output sizes."""
+        """Test Dataset with token counts."""
         dataset = Dataset(
-            inputSize=1000,
-            outputSize=500,
-            datasetName="test_dataset",
+            dataUsage="input",
+            dataType="token",
+            dataQuantity=1000,
         )
-        assert dataset.inputSize == 1000
-        assert dataset.outputSize == 500
+        assert dataset.dataQuantity == 1000
+        assert dataset.dataUsage == "input"
 
     def test_task_defaults(self) -> None:
         """Test Task model defaults."""
@@ -106,11 +107,12 @@ class TestBoAmpsModels:
         """Test HardwareComponent model."""
         component = HardwareComponent(
             componentType="gpu",
+            nbComponent=2,
             componentName="NVIDIA A100",
             manufacturer="NVIDIA",
-            tdp=400.0,
         )
         assert component.componentType == "gpu"
+        assert component.nbComponent == 2
         assert component.componentName == "NVIDIA A100"
 
     def test_infrastructure_defaults(self) -> None:
@@ -251,8 +253,15 @@ class TestBoAmpsReporter:
         assert report.task.nbRequest == 15  # 10 API + 5 cached
         assert len(report.task.algorithms) == 1
         assert report.task.algorithms[0].foundationModelName == "gpt-4.1"
-        assert len(report.task.dataset) == 1
-        assert report.task.dataset[0].inputSize == 1000 + 0  # Only API tokens tracked
+        
+        # Check datasets - should have input and output as per BoAmps schema
+        assert len(report.task.dataset) == 2
+        input_dataset = next(d for d in report.task.dataset if d.dataUsage == "input")
+        output_dataset = next(d for d in report.task.dataset if d.dataUsage == "output")
+        assert input_dataset.dataType == "token"
+        assert input_dataset.dataQuantity == 1000  # total_prompt_tokens
+        assert output_dataset.dataType == "token"
+        assert output_dataset.dataQuantity == 500  # total_completion_tokens
         assert report.task.taskDescription == "LLM inference testing"
 
         # Check measures
@@ -263,6 +272,9 @@ class TestBoAmpsReporter:
         # Check infrastructure
         assert report.infrastructure.infraType == "publicCloud"
         assert report.infrastructure.cloudService == "openai"
+        # Check hardware components have required nbComponent
+        assert len(report.infrastructure.components) >= 1
+        assert report.infrastructure.components[0].nbComponent >= 1
 
         # Check environment
         assert report.environment.country == "FRA"

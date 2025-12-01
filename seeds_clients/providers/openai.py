@@ -360,11 +360,14 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         # Resolve $ref references by inlining $defs
         if "$defs" in schema:
             defs = schema.pop("$defs")
-            schema = self._resolve_refs(schema, defs)
+            resolved = self._resolve_refs(schema, defs)
+            if isinstance(resolved, dict):
+                schema = resolved
 
         # Apply OpenAI strict mode patches
-        schema = self._patch_schema_for_openai_strict(schema)
-
+        patched = self._patch_schema_for_openai_strict(schema)
+        if isinstance(patched, dict):
+            return patched
         return schema
 
     def _patch_schema_for_openai_strict(self, schema: dict[str, Any] | list[Any] | Any) -> Any:

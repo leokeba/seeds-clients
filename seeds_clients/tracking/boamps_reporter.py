@@ -35,7 +35,10 @@ from seeds_clients.core.types import CumulativeTracking
 
 
 class Publisher(BaseModel):
-    """Publisher information for the report."""
+    """Publisher information for the report.
+    
+    Note: When publisher is included, confidentialityLevel is required by BoAmps schema.
+    """
 
     name: str | None = Field(default=None, description="Name of the organization")
     division: str | None = Field(
@@ -45,7 +48,12 @@ class Publisher(BaseModel):
         default=None, description="Name of the project"
     )
     confidentialityLevel: Literal["public", "internal", "confidential", "secret"] = Field(
-        default="public", description="Confidentiality level of the report"
+        default="public", 
+        description="Confidentiality level of the report (required by BoAmps schema)"
+    )
+    publicKey: str | None = Field(
+        default=None,
+        description="Cryptographic public key to verify publisher identity",
     )
 
 
@@ -118,25 +126,43 @@ class Algorithm(BaseModel):
 class Dataset(BaseModel):
     """Dataset information for the BoAmps report."""
 
-    dataType: str = Field(
-        default="text",
-        description="Type of data (text, image, audio, video, tabular, etc.)",
+    dataUsage: Literal["input", "output"] = Field(
+        description="Whether this dataset is used as input or output",
+    )
+    dataType: Literal[
+        "tabular", "audio", "boolean", "image", "video", 
+        "object", "text", "token", "word", "other"
+    ] = Field(
+        default="token",
+        description="The nature of the data (token for LLM inference)",
     )
     dataFormat: str | None = Field(
         default=None,
         description="Format of the data (json, csv, etc.)",
     )
-    inputSize: int | None = Field(
+    dataQuantity: int | None = Field(
         default=None,
-        description="Size of input data (tokens, pixels, samples, etc.)",
+        description="Number of data items (e.g., number of tokens)",
     )
-    outputSize: int | None = Field(
+    dataSize: float | None = Field(
         default=None,
-        description="Size of output data",
+        description="Size of the dataset in GB",
     )
-    datasetName: str | None = Field(
+    shape: str | None = Field(
         default=None,
-        description="Name of the dataset if applicable",
+        description="Shape of the dataset (e.g., for dataframes)",
+    )
+    source: Literal["public", "private", "other"] | None = Field(
+        default=None,
+        description="Source type of the dataset",
+    )
+    sourceUri: str | None = Field(
+        default=None,
+        description="URI of the dataset if available",
+    )
+    owner: str | None = Field(
+        default=None,
+        description="Owner of the dataset if available",
     )
 
 
@@ -230,8 +256,12 @@ class Measure(BaseModel):
 class HardwareComponent(BaseModel):
     """Hardware component information for the BoAmps report."""
 
-    componentType: Literal["cpu", "gpu", "ram", "storage", "other"] = Field(
-        description="Type of hardware component",
+    componentType: str = Field(
+        description="Type of hardware component (cpu, gpu, ram, hdd, ssd, etc.)",
+    )
+    nbComponent: int = Field(
+        default=1,
+        description="Number of items of this component",
     )
     componentName: str | None = Field(
         default=None,
@@ -241,17 +271,23 @@ class HardwareComponent(BaseModel):
         default=None,
         description="Manufacturer of the component",
     )
-    tdp: float | None = Field(
+    family: str | None = Field(
         default=None,
-        description="Thermal Design Power in watts",
+        description="Family of the component (e.g., geforce, xeon)",
     )
-    nbCores: int | None = Field(
+    series: str | None = Field(
         default=None,
-        description="Number of cores (for CPU/GPU)",
+        description="Series of the component (e.g., gtx1080)",
     )
     memorySize: float | None = Field(
         default=None,
-        description="Memory size in GB",
+        description="Memory size in GB (for GPU embedded memory, not RAM)",
+    )
+    share: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Percentage of physical equipment used (0-1, default 1 if not shared)",
     )
 
 
@@ -493,29 +529,35 @@ class BoAmpsReporter:
     def _get_tracking(self) -> CumulativeTracking:
         """Get cumulative tracking from client."""
         if hasattr(self.client, "cumulative_tracking"):
-            return self.client.cumulative_tracking
+            tracking: CumulativeTracking = self.client.cumulative_tracking
+            return tracking
         elif hasattr(self.client, "_cumulative_tracking"):
-            return self.client._cumulative_tracking
+            tracking = self.client._cumulative_tracking
+            return tracking
         else:
             raise ValueError("Client does not have cumulative tracking data")
 
     def _get_model(self) -> str:
         """Get model name from client."""
-        return getattr(self.client, "model", "unknown")
+        result: str = getattr(self.client, "model", "unknown")
+        return result
 
     def _get_provider(self) -> str:
         """Get provider name from client."""
         if hasattr(self.client, "_get_provider_name"):
-            return self.client._get_provider_name()
-        return getattr(self.client, "provider", "unknown")
+            return str(self.client._get_provider_name())
+        result: str = getattr(self.client, "provider", "unknown")
+        return result
 
     def _get_tracking_method(self) -> str:
         """Get tracking method from client."""
-        return getattr(self.client, "tracking_method", "ecologits")
+        result: str = getattr(self.client, "tracking_method", "ecologits")
+        return result
 
     def _get_electricity_mix_zone(self) -> str:
         """Get electricity mix zone from client."""
-        return getattr(self.client, "electricity_mix_zone", "WOR")
+        result: str = getattr(self.client, "electricity_mix_zone", "WOR")
+        return result
 
     def _build_header(self) -> Header:
         """Build the header section."""
@@ -540,11 +582,17 @@ class BoAmpsReporter:
             parametersNumber=_get_model_parameters(model),
         )
 
-        # Build dataset info from tracking
-        dataset = Dataset(
-            dataType=self.data_type,
-            inputSize=tracking.total_prompt_tokens,
-            outputSize=tracking.total_completion_tokens,
+        # Build dataset info from tracking - split into input and output
+        # For LLM inference, we use "token" as the dataType
+        input_dataset = Dataset(
+            dataUsage="input",
+            dataType="token",
+            dataQuantity=tracking.total_prompt_tokens,
+        )
+        output_dataset = Dataset(
+            dataUsage="output",
+            dataType="token",
+            dataQuantity=tracking.total_completion_tokens,
         )
 
         return Task(
@@ -552,7 +600,7 @@ class BoAmpsReporter:
             taskFamily=self.task_family,
             nbRequest=tracking.total_request_count,
             algorithms=[algorithm],
-            dataset=[dataset],
+            dataset=[input_dataset, output_dataset],
             taskDescription=self.task_description,
         )
 
@@ -587,10 +635,11 @@ class BoAmpsReporter:
         cloud_service = _get_cloud_provider_from_model(model, provider)
 
         # For API-based LLMs, we don't know the exact hardware
-        # We indicate this is a cloud service
+        # We indicate this is a cloud service with unknown GPU configuration
         components = [
             HardwareComponent(
                 componentType="gpu",
+                nbComponent=1,
                 componentName="Unknown (Cloud API)",
             )
         ]

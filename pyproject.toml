@@ -127,6 +127,13 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 strict_equality = true
+exclude = [
+    "^site/",
+    "^htmlcov/",
+    "^old/",
+    "^tests/",
+    "^examples/",
+]
 
 [[tool.mypy.overrides]]
 module = [
@@ -141,6 +148,16 @@ ignore_missing_imports = true
 [tool.black]
 line-length = 100
 target-version = ['py311', 'py312', 'py313']
+
+[tool.pyright]
+exclude = [
+    "site",
+    "htmlcov",
+    "old",
+    "tests",
+    "examples",
+]
+pythonVersion = "3.11"
 
 [dependency-groups]
 dev = [

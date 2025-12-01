@@ -24,7 +24,7 @@ from seeds_clients.tracking.codecarbon_tracker import CodeCarbonMixin
 from seeds_clients.utils.pricing import calculate_cost
 
 
-class ModelGardenClient(CodeCarbonMixin, OpenAIClient):
+class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
     """
     Client for Model Garden servers with CodeCarbon carbon tracking.
     
@@ -443,7 +443,8 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):
         try:
             response = self._http_client.get("/api/v1/carbon/inference/stats")
             if response.status_code == 200:
-                return response.json()
+                result: dict[str, Any] = response.json()
+                return result
             return None
         except Exception:
             return None
@@ -459,7 +460,8 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):
             client = self._get_async_client()
             response = await client.get("/api/v1/carbon/inference/stats")
             if response.status_code == 200:
-                return response.json()
+                result: dict[str, Any] = response.json()
+                return result
             return None
         except Exception:
             return None
@@ -476,7 +478,8 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):
         try:
             response = self._http_client.get("/api/v1/carbon/summary")
             if response.status_code == 200:
-                return response.json()
+                result: dict[str, Any] = response.json()
+                return result
             return None
         except Exception:
             return None
