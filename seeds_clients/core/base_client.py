@@ -477,12 +477,25 @@ class BaseClient(ABC):
             except asyncio.CancelledError:
                 pass
 
+    # Parameters to exclude from cache key (don't affect output content)
+    _CACHE_EXCLUDE_PARAMS = frozenset({
+        "stream",           # Delivery method, not content
+        "stream_options",   # Streaming configuration
+        "timeout",          # Network timeout
+        "user",             # User identifier for logging
+        "n",                # Number of completions (we cache single responses)
+        "_original_response_format",  # Internal tracking parameter
+    })
+
     def _compute_cache_key(
         self,
         messages: list[Message],
         params: dict[str, Any],
     ) -> str:
         """Compute deterministic cache key from request parameters.
+
+        Includes all parameters that affect output content, excluding only
+        parameters related to delivery method or internal tracking.
 
         Args:
             messages: Conversation messages
@@ -493,6 +506,7 @@ class BaseClient(ABC):
         """
         # Build cache data structure
         cache_data = {
+            "provider": self._get_provider_name(),
             "model": self.model,
             "messages": [
                 {
@@ -501,14 +515,39 @@ class BaseClient(ABC):
                 }
                 for m in messages
             ],
+            # Include all params except those that don't affect output
             "params": {
-                k: v
+                k: self._normalize_param_for_cache(k, v)
                 for k, v in params.items()
-                if k in ["temperature", "top_p", "max_tokens", "frequency_penalty"]
+                if k not in self._CACHE_EXCLUDE_PARAMS
             },
         }
 
         return CacheManager.generate_key(cache_data)
+
+    def _normalize_param_for_cache(self, key: str, value: Any) -> Any:
+        """Normalize parameter values for deterministic cache key generation.
+
+        Handles special cases like Pydantic models and complex objects.
+
+        Args:
+            key: Parameter name
+            value: Parameter value
+
+        Returns:
+            JSON-serializable representation of the value
+        """
+        # Handle response_format which may be a Pydantic model class
+        if key == "response_format" and isinstance(value, type) and issubclass(value, BaseModel):
+            # Use the schema as the cache key component
+            return {"type": "json_schema", "schema": value.model_json_schema()}
+
+        # Handle tools/functions which may contain complex objects
+        if key in ("tools", "functions") and isinstance(value, list):
+            # Tools are already dicts, but ensure consistent serialization
+            return value
+
+        return value
 
     def _hash_content(self, content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
         """Hash content for cache key generation.

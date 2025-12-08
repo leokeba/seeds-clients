@@ -54,7 +54,8 @@ class CacheManager:
             key: Cache key
 
         Returns:
-            Raw API response dict if found and not expired, None otherwise
+            Raw API response dict if found, None otherwise.
+            Expiration is handled automatically by diskcache's TTL mechanism.
         """
         try:
             cached = self.cache.get(key)
@@ -63,12 +64,6 @@ class CacheManager:
 
             # Type assertion: we know cached is a dict with our structure
             cached_entry = cast(dict[str, Any], cached)
-
-            # Check if expired
-            if self._is_expired(cached_entry):
-                self.cache.delete(key)
-                return None
-
             return cast(dict[str, Any], cached_entry["raw_response"])
         except Exception as e:
             raise CacheError(f"Failed to read from cache: {e}") from e
@@ -141,23 +136,6 @@ class CacheManager:
             }
         except Exception as e:
             raise CacheError(f"Failed to get cache stats: {e}") from e
-
-    def _is_expired(self, cached_entry: dict[str, Any]) -> bool:
-        """Check if a cache entry has expired.
-
-        Args:
-            cached_entry: Cache entry with cached_at timestamp
-
-        Returns:
-            True if expired, False otherwise
-        """
-        if not self.ttl_seconds:
-            return False
-
-        cached_at = cached_entry.get("cached_at", 0)
-        age = time.time() - cached_at
-        is_expired: bool = age > self.ttl_seconds
-        return is_expired
 
     @staticmethod
     def generate_key(data: dict[str, Any]) -> str:
