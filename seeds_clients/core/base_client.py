@@ -177,9 +177,13 @@ class BaseClient(ABC):
         """
         # Extract response_format if provided (keep copy for parsing later)
         # Check for _original_response_format first (set by providers that transform the format)
-        response_format = kwargs.pop("_original_response_format", None) or kwargs.get("response_format", None)
+        response_format = kwargs.pop("_original_response_format", None) or kwargs.get(
+            "response_format", None
+        )
         # Ensure response_format is a Pydantic model class, not a transformed dict
-        if response_format is not None and not (isinstance(response_format, type) and issubclass(response_format, BaseModel)):
+        if response_format is not None and not (
+            isinstance(response_format, type) and issubclass(response_format, BaseModel)
+        ):
             response_format = None
 
         # Generate cache key
@@ -276,9 +280,13 @@ class BaseClient(ABC):
         """
         # Extract response_format if provided (keep copy for parsing later)
         # Check for _original_response_format first (set by providers that transform the format)
-        response_format = kwargs.pop("_original_response_format", None) or kwargs.get("response_format", None)
+        response_format = kwargs.pop("_original_response_format", None) or kwargs.get(
+            "response_format", None
+        )
         # Ensure response_format is a Pydantic model class, not a transformed dict
-        if response_format is not None and not (isinstance(response_format, type) and issubclass(response_format, BaseModel)):
+        if response_format is not None and not (
+            isinstance(response_format, type) and issubclass(response_format, BaseModel)
+        ):
             response_format = None
 
         # Generate cache key
@@ -378,7 +386,9 @@ class BaseClient(ABC):
         semaphore = asyncio.Semaphore(max_concurrent)
         completed = 0
 
-        async def process_one(index: int, messages: list[Message]) -> tuple[int, Response | Exception]:
+        async def process_one(
+            index: int, messages: list[Message]
+        ) -> tuple[int, Response | Exception]:
             nonlocal completed
             async with semaphore:
                 try:
@@ -458,7 +468,9 @@ class BaseClient(ABC):
                     await queue.put((index, e))
 
         async def producer() -> None:
-            tasks = [asyncio.create_task(process_one(i, msgs)) for i, msgs in enumerate(messages_list)]
+            tasks = [
+                asyncio.create_task(process_one(i, msgs)) for i, msgs in enumerate(messages_list)
+            ]
             await asyncio.gather(*tasks)
             await queue.put(None)  # Signal completion
 
@@ -478,14 +490,16 @@ class BaseClient(ABC):
                 pass
 
     # Parameters to exclude from cache key (don't affect output content)
-    _CACHE_EXCLUDE_PARAMS = frozenset({
-        "stream",           # Delivery method, not content
-        "stream_options",   # Streaming configuration
-        "timeout",          # Network timeout
-        "user",             # User identifier for logging
-        "n",                # Number of completions (we cache single responses)
-        "_original_response_format",  # Internal tracking parameter
-    })
+    _CACHE_EXCLUDE_PARAMS = frozenset(
+        {
+            "stream",  # Delivery method, not content
+            "stream_options",  # Streaming configuration
+            "timeout",  # Network timeout
+            "user",  # User identifier for logging
+            "n",  # Number of completions (we cache single responses)
+            "_original_response_format",  # Internal tracking parameter
+        }
+    )
 
     def _compute_cache_key(
         self,
@@ -627,9 +641,7 @@ class BaseClient(ABC):
                 parsed=parsed_model,
             )
         except (json.JSONDecodeError, ValueError) as e:
-            raise ValidationError(
-                f"Failed to parse structured output: {str(e)}"
-            ) from e
+            raise ValidationError(f"Failed to parse structured output: {str(e)}") from e
 
     def _track_request(
         self,
