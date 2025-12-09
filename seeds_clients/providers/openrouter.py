@@ -94,7 +94,7 @@ class OpenRouterClient(OpenAIClient):
         self,
         api_key: str | None = None,
         model: str = "openai/gpt-4.1",
-        cache_dir: str = "cache",
+        cache_dir: str | None = None,
         ttl_hours: float | None = 24.0,
         max_tokens: int | None = None,
         temperature: float = 1.0,

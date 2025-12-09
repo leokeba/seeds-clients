@@ -87,7 +87,7 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         base_url: str | None = None,
         api_key: str | None = None,
         model: str = "default",
-        cache_dir: str = "cache",
+        cache_dir: str | None = None,
         ttl_hours: float | None = 24.0,
         max_tokens: int | None = None,
         temperature: float = 1.0,
@@ -182,7 +182,7 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
     def generate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -228,7 +228,7 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
     async def agenerate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """

@@ -124,13 +124,9 @@ class TestBatchGenerate:
         client.agenerate = mock_agenerate
 
         # Test batch_generate
-        messages_list = [
-            [Message(role="user", content=f"Question {i}")] for i in range(3)
-        ]
+        messages_list = [[Message(role="user", content=f"Question {i}")] for i in range(3)]
 
-        result = await BaseClient.batch_generate(
-            client, messages_list, max_concurrent=2
-        )
+        result = await BaseClient.batch_generate(client, messages_list, max_concurrent=2)
 
         assert result.successful_count == 3
         assert result.failed_count == 0
@@ -156,9 +152,7 @@ class TestBatchGenerate:
 
         client.agenerate = mock_agenerate
 
-        messages_list = [
-            [Message(role="user", content=f"Question {i}")] for i in range(3)
-        ]
+        messages_list = [[Message(role="user", content=f"Question {i}")] for i in range(3)]
 
         result = await BaseClient.batch_generate(client, messages_list)
 
@@ -187,13 +181,9 @@ class TestBatchGenerate:
         def on_progress(completed, total, result):
             progress_calls.append((completed, total))
 
-        messages_list = [
-            [Message(role="user", content=f"Question {i}")] for i in range(3)
-        ]
+        messages_list = [[Message(role="user", content=f"Question {i}")] for i in range(3)]
 
-        await BaseClient.batch_generate(
-            client, messages_list, on_progress=on_progress
-        )
+        await BaseClient.batch_generate(client, messages_list, on_progress=on_progress)
 
         assert len(progress_calls) == 3
         # Progress should track completed vs total
@@ -223,9 +213,7 @@ class TestBatchGenerateIter:
 
         client.agenerate = mock_agenerate
 
-        messages_list = [
-            [Message(role="user", content=f"Question {i}")] for i in range(3)
-        ]
+        messages_list = [[Message(role="user", content=f"Question {i}")] for i in range(3)]
 
         results = []
         async for idx, result in BaseClient.batch_generate_iter(
@@ -257,16 +245,12 @@ class TestBatchGenerateIter:
 
         client.agenerate = mock_agenerate
 
-        messages_list = [
-            [Message(role="user", content=f"Question {i}")] for i in range(3)
-        ]
+        messages_list = [[Message(role="user", content=f"Question {i}")] for i in range(3)]
 
         successes = []
         failures = []
 
-        async for idx, result in BaseClient.batch_generate_iter(
-            client, messages_list
-        ):
+        async for idx, result in BaseClient.batch_generate_iter(client, messages_list):
             if isinstance(result, Exception):
                 failures.append((idx, result))
             else:
@@ -354,7 +338,7 @@ class TestAsyncGenerate:
         client._compute_cache_key = mock_compute_cache_key
 
         messages = [Message(role="user", content="Hi")]
-        response = await BaseClient.agenerate(client, messages)
+        response = await BaseClient.agenerate(client, messages, use_cache=True)
 
         assert response.content == "Cached!"
         assert response.cached is True

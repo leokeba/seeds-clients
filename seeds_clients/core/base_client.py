@@ -136,7 +136,7 @@ class BaseClient(ABC):
     def generate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """Generate a response from the LLM.
@@ -240,7 +240,7 @@ class BaseClient(ABC):
     async def agenerate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """Generate a response asynchronously.

@@ -62,7 +62,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
         self,
         api_key: str | None = None,
         model: str = "claude-sonnet-4-20250514",
-        cache_dir: str = "cache",
+        cache_dir: str | None = None,
         ttl_hours: float | None = 24.0,
         max_tokens: int = 4096,
         temperature: float | None = None,
@@ -98,6 +98,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
         # Import anthropic here to avoid import errors if not installed
         try:
             import anthropic
+
             self._anthropic = anthropic
         except ImportError as e:
             raise ConfigurationError(
@@ -127,7 +128,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
             cache_dir=cache_dir,
             ttl_hours=ttl_hours,
             electricity_mix_zone=electricity_mix_zone,
-            **kwargs
+            **kwargs,
         )
 
         # Set electricity mix zone for EcoLogits mixin
@@ -154,7 +155,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
     def generate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -196,7 +197,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
     async def agenerate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -326,15 +327,21 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
         params["messages"] = self._format_messages(messages)
 
         # Handle structured output via tool_use
-        if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
             tool_name = response_format.__name__
             tool_schema = self._pydantic_to_json_schema(response_format)
 
-            params["tools"] = [{
-                "name": tool_name,
-                "description": f"Extract structured data as {tool_name}",
-                "input_schema": tool_schema,
-            }]
+            params["tools"] = [
+                {
+                    "name": tool_name,
+                    "description": f"Extract structured data as {tool_name}",
+                    "input_schema": tool_schema,
+                }
+            ]
             params["tool_choice"] = {"type": "tool", "name": tool_name}
 
         # Pass through any remaining kwargs
@@ -728,10 +735,12 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
                 for item in msg.content:
                     item_type = item.get("type")
                     if item_type == "text":
-                        content_blocks.append({
-                            "type": "text",
-                            "text": item.get("text", ""),
-                        })
+                        content_blocks.append(
+                            {
+                                "type": "text",
+                                "text": item.get("text", ""),
+                            }
+                        )
                     elif item_type == "image":
                         image_block = self._format_image_part(item.get("source", ""))
                         if image_block:

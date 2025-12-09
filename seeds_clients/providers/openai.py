@@ -51,7 +51,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         api_key: str | None = None,
         model: str = "gpt-4.1",
         base_url: str = "https://api.openai.com/v1",
-        cache_dir: str = "cache",
+        cache_dir: str | None = None,
         ttl_hours: float | None = 24.0,
         max_tokens: int | None = None,
         temperature: float = 1.0,
@@ -95,7 +95,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             cache_dir=cache_dir,
             ttl_hours=ttl_hours,
             electricity_mix_zone=electricity_mix_zone,
-            **kwargs
+            **kwargs,
         )
 
         # Set electricity mix zone for EcoLogits mixin
@@ -142,7 +142,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
     def generate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -181,7 +181,11 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         response_format = kwargs.get("response_format", None)
 
         # Add structured output configuration if provided
-        if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
             # Convert Pydantic model to OpenAI's JSON schema format
             schema = self._pydantic_to_json_schema(response_format)
             # Store original Pydantic class for base class parsing
@@ -201,7 +205,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
     async def agenerate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -237,7 +241,11 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         response_format = kwargs.get("response_format", None)
 
         # Add structured output configuration if provided
-        if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
             schema = self._pydantic_to_json_schema(response_format)
             # Store original Pydantic class for base class parsing
             kwargs["_original_response_format"] = response_format
@@ -386,10 +394,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         """
         if isinstance(schema, dict):
             # Check if this is an object type (has "properties" or "type": "object")
-            is_object = (
-                schema.get("type") == "object" or
-                "properties" in schema
-            )
+            is_object = schema.get("type") == "object" or "properties" in schema
 
             if is_object:
                 # Patch 1: Add additionalProperties: false
@@ -672,17 +677,21 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
                 for item in msg.content:
                     item_type = item.get("type")
                     if item_type == "text":
-                        content_parts.append({
-                            "type": "text",
-                            "text": item.get("text", ""),
-                        })
+                        content_parts.append(
+                            {
+                                "type": "text",
+                                "text": item.get("text", ""),
+                            }
+                        )
                     elif item_type == "image":
-                        content_parts.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": self._format_image(item.get("source", "")),
-                            },
-                        })
+                        content_parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": self._format_image(item.get("source", "")),
+                                },
+                            }
+                        )
                 message_dict["content"] = content_parts
 
             formatted.append(message_dict)
@@ -704,9 +713,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         from pathlib import Path
 
         # Already a URL
-        if isinstance(image, str) and (
-            image.startswith("http://") or image.startswith("https://")
-        ):
+        if isinstance(image, str) and (image.startswith("http://") or image.startswith("https://")):
             return image
 
         # File path

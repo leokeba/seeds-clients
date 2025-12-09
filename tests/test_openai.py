@@ -100,9 +100,7 @@ class TestOpenAIClientGenerate:
             },
         }
 
-    def test_generate_text_message(
-        self, client: OpenAIClient, mock_response: dict
-    ) -> None:
+    def test_generate_text_message(self, client: OpenAIClient, mock_response: dict) -> None:
         """Test generating response from text message."""
         with patch.object(client._http_client, "post") as mock_post:
             mock_post.return_value = Mock(
@@ -122,9 +120,7 @@ class TestOpenAIClientGenerate:
             assert response.response_id == "chatcmpl-123"
             assert not response.cached
 
-    def test_generate_with_system_message(
-        self, client: OpenAIClient, mock_response: dict
-    ) -> None:
+    def test_generate_with_system_message(self, client: OpenAIClient, mock_response: dict) -> None:
         """Test generating with system message."""
         with patch.object(client._http_client, "post") as mock_post:
             mock_post.return_value = Mock(
@@ -145,9 +141,7 @@ class TestOpenAIClientGenerate:
             assert payload["messages"][0]["role"] == "system"
             assert payload["messages"][1]["role"] == "user"
 
-    def test_generate_with_kwargs(
-        self, client: OpenAIClient, mock_response: dict
-    ) -> None:
+    def test_generate_with_kwargs(self, client: OpenAIClient, mock_response: dict) -> None:
         """Test generating with additional kwargs."""
         with patch.object(client._http_client, "post") as mock_post:
             mock_post.return_value = Mock(
@@ -168,9 +162,7 @@ class TestOpenAIClientGenerate:
             assert payload["temperature"] == 0.7
             assert payload["max_tokens"] == 500
 
-    def test_generate_caching(
-        self, client: OpenAIClient, mock_response: dict
-    ) -> None:
+    def test_generate_caching(self, client: OpenAIClient, mock_response: dict) -> None:
         """Test response caching."""
         with patch.object(client._http_client, "post") as mock_post:
             mock_post.return_value = Mock(
@@ -181,12 +173,12 @@ class TestOpenAIClientGenerate:
             messages = [Message(role="user", content="Hello")]
 
             # First call - should hit API
-            response1 = client.generate(messages)
+            response1 = client.generate(messages, use_cache=True)
             assert mock_post.call_count == 1
             assert not response1.cached
 
             # Second call - should use cache
-            response2 = client.generate(messages)
+            response2 = client.generate(messages, use_cache=True)
             assert mock_post.call_count == 1  # No additional API call
             assert response2.cached
             assert response2.content == response1.content
@@ -195,9 +187,7 @@ class TestOpenAIClientGenerate:
             if client.cache:
                 client.cache.clear()
 
-    def test_generate_multimodal_message(
-        self, client: OpenAIClient, mock_response: dict
-    ) -> None:
+    def test_generate_multimodal_message(self, client: OpenAIClient, mock_response: dict) -> None:
         """Test generating with multimodal (text + image) message."""
         with patch.object(client._http_client, "post") as mock_post:
             mock_post.return_value = Mock(
@@ -503,9 +493,7 @@ class TestOpenAIStructuredOutputs:
             assert isinstance(response.parsed.address, Address)
             assert response.parsed.address.city == "Boston"
 
-    def test_structured_output_with_field_descriptions(
-        self, client: OpenAIClient
-    ) -> None:
+    def test_structured_output_with_field_descriptions(self, client: OpenAIClient) -> None:
         """Test structured output with Field descriptions."""
 
         class Product(BaseModel):
@@ -681,14 +669,14 @@ class TestOpenAIStructuredOutputs:
             messages = [Message(role="user", content="Extract cached person")]
 
             # First call
-            response1 = client.generate(messages, response_format=Person)
+            response1 = client.generate(messages, response_format=Person, use_cache=True)
             assert mock_post.call_count == 1
             assert response1.parsed is not None
             assert response1.parsed.name == "Cached Person"
             assert not response1.cached
 
             # Second call - should use cache
-            response2 = client.generate(messages, response_format=Person)
+            response2 = client.generate(messages, response_format=Person, use_cache=True)
             assert mock_post.call_count == 1  # No additional API call
             assert response2.parsed is not None
             assert response2.parsed.name == "Cached Person"
@@ -964,4 +952,3 @@ class TestOpenAICostTracking:
             assert response.tracking.cost_usd == 0.0
             assert response.tracking.prompt_tokens == 1000
             assert response.tracking.completion_tokens == 500
-

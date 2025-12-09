@@ -57,7 +57,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
         self,
         api_key: str | None = None,
         model: str = "gemini-2.5-flash",
-        cache_dir: str = "cache",
+        cache_dir: str | None = None,
         ttl_hours: float | None = 24.0,
         max_output_tokens: int | None = None,
         temperature: float | None = None,
@@ -94,6 +94,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
         try:
             from google import genai
             from google.genai import types
+
             self._genai = genai
             self._types = types
         except ImportError as e:
@@ -104,11 +105,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
 
         # Get API key from parameter or environment
         # google-genai accepts GEMINI_API_KEY or GOOGLE_API_KEY
-        resolved_api_key = (
-            api_key
-            or os.getenv("GEMINI_API_KEY")
-            or os.getenv("GOOGLE_API_KEY")
-        )
+        resolved_api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not resolved_api_key:
             raise ConfigurationError(
                 "Google API key required. Provide via api_key parameter or "
@@ -128,7 +125,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             cache_dir=cache_dir,
             ttl_hours=ttl_hours,
             electricity_mix_zone=electricity_mix_zone,
-            **kwargs
+            **kwargs,
         )
 
         # Set electricity mix zone for EcoLogits mixin
@@ -156,7 +153,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
     def generate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -198,7 +195,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
     async def agenerate(
         self,
         messages: list[Message],
-        use_cache: bool = True,
+        use_cache: bool = False,
         **kwargs: Any,
     ) -> Response[Any]:
         """
@@ -280,7 +277,11 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             config_params["top_k"] = top_k
 
         # Structured output configuration
-        if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
             config_params["response_mime_type"] = "application/json"
             config_params["response_schema"] = response_format
 
@@ -501,10 +502,12 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
                 if hasattr(candidate, "safety_ratings") and candidate.safety_ratings:
                     ratings = []
                     for rating in candidate.safety_ratings:
-                        ratings.append({
-                            "category": str(getattr(rating, "category", "")),
-                            "probability": str(getattr(rating, "probability", "")),
-                        })
+                        ratings.append(
+                            {
+                                "category": str(getattr(rating, "category", "")),
+                                "probability": str(getattr(rating, "probability", "")),
+                            }
+                        )
                     cand_dict["safety_ratings"] = ratings
 
                 candidates.append(cand_dict)
@@ -651,6 +654,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
 
         # Remove common suffixes like -001, -002, etc.
         import re
+
         normalized = re.sub(r"-\d{3}$", "", model_name)
 
         return normalized
@@ -675,10 +679,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
 
             # Handle text content
             if isinstance(msg.content, str):
-                content = types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=msg.content)]
-                )
+                content = types.Content(role=role, parts=[types.Part.from_text(text=msg.content)])
                 contents.append(content)
 
             # Handle multimodal content
@@ -739,10 +740,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
                     file_mime_type: str = guessed_type or "image/jpeg"
                     with open(image_path, "rb") as f:
                         image_bytes = f.read()
-                    return types.Part.from_bytes(
-                        data=image_bytes,
-                        mime_type=file_mime_type
-                    )
+                    return types.Part.from_bytes(data=image_bytes, mime_type=file_mime_type)
                 return None
 
         # PIL Image

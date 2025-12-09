@@ -30,12 +30,18 @@ def mock_anthropic():
     mock_anthropic_module.APIStatusError = type(
         "APIStatusError",
         (Exception,),
-        {"__init__": lambda self, msg, status_code=500: setattr(self, "status_code", status_code) or None}
+        {
+            "__init__": lambda self, msg, status_code=500: setattr(self, "status_code", status_code)
+            or None
+        },
     )
 
-    with patch.dict("sys.modules", {
-        "anthropic": mock_anthropic_module,
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "anthropic": mock_anthropic_module,
+        },
+    ):
         yield mock_anthropic_module
 
 
@@ -59,7 +65,9 @@ class TestAnthropicClientInit:
         client = AnthropicClient()
         assert client.api_key == "env-key"
 
-    def test_init_without_key_raises_error(self, mock_anthropic, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_without_key_raises_error(
+        self, mock_anthropic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test initialization without API key raises error."""
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
@@ -191,12 +199,12 @@ class TestAnthropicClientGenerate:
         messages = [Message(role="user", content="Hello")]
 
         # First call - should hit API
-        response1 = client.generate(messages)
+        response1 = client.generate(messages, use_cache=True)
         assert client._client.messages.create.call_count == 1
         assert not response1.cached
 
         # Second call - should use cache
-        response2 = client.generate(messages)
+        response2 = client.generate(messages, use_cache=True)
         assert client._client.messages.create.call_count == 1  # No additional API call
         assert response2.cached
         assert response2.content == response1.content
@@ -299,12 +307,12 @@ class TestAnthropicClientAsync:
         messages = [Message(role="user", content="Hello async")]
 
         # First call - should hit API
-        response1 = await client.agenerate(messages)
+        response1 = await client.agenerate(messages, use_cache=True)
         assert client._async_client.messages.create.call_count == 1
         assert not response1.cached
 
         # Second call - should use cache
-        response2 = await client.agenerate(messages)
+        response2 = await client.agenerate(messages, use_cache=True)
         assert client._async_client.messages.create.call_count == 1
         assert response2.cached
 
@@ -397,6 +405,7 @@ class TestAnthropicClientImageFormatting:
     def test_format_image_bytes(self, client) -> None:
         """Test formatting image bytes."""
         import io
+
         img = Image.new("RGB", (10, 10), color="green")
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -644,12 +653,18 @@ class TestAnthropicModelNormalization:
 
     def test_normalize_claude_3_5_sonnet(self, client) -> None:
         """Test normalizing Claude 3.5 Sonnet model names."""
-        assert client._normalize_model_for_pricing("claude-3-5-sonnet-20241022") == "claude-3-5-sonnet"
-        assert client._normalize_model_for_pricing("claude-3-5-sonnet-20240620") == "claude-3-5-sonnet"
+        assert (
+            client._normalize_model_for_pricing("claude-3-5-sonnet-20241022") == "claude-3-5-sonnet"
+        )
+        assert (
+            client._normalize_model_for_pricing("claude-3-5-sonnet-20240620") == "claude-3-5-sonnet"
+        )
 
     def test_normalize_claude_3_5_haiku(self, client) -> None:
         """Test normalizing Claude 3.5 Haiku model names."""
-        assert client._normalize_model_for_pricing("claude-3-5-haiku-20241022") == "claude-3-5-haiku"
+        assert (
+            client._normalize_model_for_pricing("claude-3-5-haiku-20241022") == "claude-3-5-haiku"
+        )
 
     def test_normalize_claude_3_opus(self, client) -> None:
         """Test normalizing Claude 3 Opus model names."""

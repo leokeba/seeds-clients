@@ -24,11 +24,14 @@ def mock_genai():
     mock_genai_module = MagicMock()
     mock_genai_module.Client.return_value = MagicMock()
 
-    with patch.dict("sys.modules", {
-        "google": MagicMock(),
-        "google.genai": mock_genai_module,
-        "google.genai.types": mock_types,
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "google": MagicMock(),
+            "google.genai": mock_genai_module,
+            "google.genai.types": mock_types,
+        },
+    ):
         yield mock_genai_module, mock_types
 
 
@@ -46,7 +49,9 @@ class TestGoogleClientInit:
         assert client.api_key == "test-key"
         assert client.model == "gemini-2.5-flash"
 
-    def test_init_from_gemini_api_key_env(self, mock_genai, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_from_gemini_api_key_env(
+        self, mock_genai, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test initialization from GEMINI_API_KEY environment variable."""
         mock_genai_module, mock_types = mock_genai
         monkeypatch.setenv("GEMINI_API_KEY", "env-key")
@@ -57,7 +62,9 @@ class TestGoogleClientInit:
         client = GoogleClient()
         assert client.api_key == "env-key"
 
-    def test_init_from_google_api_key_env(self, mock_genai, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_from_google_api_key_env(
+        self, mock_genai, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test initialization from GOOGLE_API_KEY environment variable."""
         mock_genai_module, mock_types = mock_genai
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -68,7 +75,9 @@ class TestGoogleClientInit:
         client = GoogleClient()
         assert client.api_key == "google-env-key"
 
-    def test_init_without_key_raises_error(self, mock_genai, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_without_key_raises_error(
+        self, mock_genai, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test initialization without API key raises error."""
         mock_genai_module, mock_types = mock_genai
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -227,12 +236,12 @@ class TestGoogleClientGenerate:
         messages = [Message(role="user", content="Hello")]
 
         # First call - should hit API
-        response1 = client.generate(messages)
+        response1 = client.generate(messages, use_cache=True)
         assert client._client.models.generate_content.call_count == 1
         assert not response1.cached
 
         # Second call - should use cache
-        response2 = client.generate(messages)
+        response2 = client.generate(messages, use_cache=True)
         assert client._client.models.generate_content.call_count == 1  # No additional API call
         assert response2.cached
         assert response2.content == response1.content
@@ -338,6 +347,7 @@ class TestGoogleClientImageFormatting:
     def test_format_image_bytes(self, client) -> None:
         """Test formatting image bytes."""
         import io
+
         img = Image.new("RGB", (10, 10), color="green")
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -575,14 +585,14 @@ class TestGoogleStructuredOutputs:
         messages = [Message(role="user", content="Extract cached person")]
 
         # First call
-        response1 = client.generate(messages, response_format=Person)
+        response1 = client.generate(messages, response_format=Person, use_cache=True)
         assert client._client.models.generate_content.call_count == 1
         assert response1.parsed is not None
         assert response1.parsed.name == "Cached Person"
         assert not response1.cached
 
         # Second call - should use cache
-        response2 = client.generate(messages, response_format=Person)
+        response2 = client.generate(messages, response_format=Person, use_cache=True)
         assert client._client.models.generate_content.call_count == 1  # No additional API call
         assert response2.parsed is not None
         assert response2.parsed.name == "Cached Person"
@@ -837,13 +847,15 @@ class TestGoogleClientAsync:
         messages = [Message(role="user", content="Cache test")]
 
         # First call - should hit API
-        response1 = await client.agenerate(messages)
+        response1 = await client.agenerate(messages, use_cache=True)
         assert client._async_client.models.generate_content.call_count == 1
         assert not response1.cached
 
         # Second call - should use cache
-        response2 = await client.agenerate(messages)
-        assert client._async_client.models.generate_content.call_count == 1  # No additional API call
+        response2 = await client.agenerate(messages, use_cache=True)
+        assert (
+            client._async_client.models.generate_content.call_count == 1
+        )  # No additional API call
         assert response2.cached
         assert response2.content == response1.content
 
