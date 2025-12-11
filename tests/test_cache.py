@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.cache import CacheManager
+from seeds_clients.core.types import Message, Response, Usage
 
 
 class TestCacheManager:
@@ -137,3 +139,47 @@ class TestCacheManager:
 
         # Metadata is stored but not returned with data
         assert retrieved == data
+
+
+class _DummyClient(BaseClient):
+    """Minimal BaseClient implementation for TTL testing."""
+
+    def _setup_tracking(self) -> None:  # pragma: no cover - not used
+        return None
+
+    def _call_api(
+        self, messages: list[Message], **kwargs: object
+    ) -> dict[str, object]:  # pragma: no cover - not used
+        return {
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+
+    async def _acall_api(
+        self, messages: list[Message], **kwargs: object
+    ) -> dict[str, object]:  # pragma: no cover - not used
+        return self._call_api(messages, **kwargs)
+
+    def _parse_response(self, raw: dict[str, object]) -> Response:
+        usage = Usage(prompt_tokens=1, completion_tokens=1)
+        return Response(content="ok", usage=usage, model="dummy", raw=raw)
+
+    def _get_provider_name(self) -> str:
+        return "dummy"
+
+
+def test_base_client_uses_ttl_override(tmp_path: Path) -> None:
+    """Ensure BaseClient forwards ttl_hours to the cache manager."""
+    client = _DummyClient(
+        model="dummy",
+        api_key="k",
+        cache_dir=tmp_path,
+        ttl_hours=1.5,
+        enable_tracking=False,
+    )
+
+    assert client.cache is not None
+    assert client.cache.ttl_seconds == pytest.approx(1.5 * 3600)
+
+    # Cleanup to avoid resource warnings
+    client.cache.close()
