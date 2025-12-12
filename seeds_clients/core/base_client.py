@@ -14,9 +14,12 @@ from seeds_clients.core.batch import BatchResult
 from seeds_clients.core.cache import CacheManager
 from seeds_clients.core.exceptions import ValidationError
 from seeds_clients.core.types import CumulativeTracking, Message, Response, TrackingData
+from seeds_clients.utils.logging_utils import get_logger
 
 # Type variable for structured outputs
 T = TypeVar("T", bound=BaseModel)
+
+logger = get_logger(__name__)
 
 
 class BaseClient(ABC):
@@ -188,11 +191,26 @@ class BaseClient(ABC):
 
         # Generate cache key
         cache_key = self._compute_cache_key(messages, kwargs)
+        provider_name = self._get_provider_name()
+
+        logger.debug(
+            "generate called",
+            extra={
+                "provider": provider_name,
+                "model": self.model,
+                "use_cache": use_cache,
+                "response_format": bool(response_format),
+            },
+        )
 
         # Try cache first
         if use_cache and self.cache:
             cached_raw = self.cache.get(cache_key)
             if cached_raw:
+                logger.debug(
+                    "cache hit",
+                    extra={"provider": provider_name, "model": self.model, "cache_key": cache_key},
+                )
                 response = self._parse_response(cached_raw)
                 response.cached = True
                 # Parse structured output if response_format was provided
@@ -204,9 +222,22 @@ class BaseClient(ABC):
                 return response
 
         # Call API with timing
+        logger.debug(
+            "calling provider",
+            extra={"provider": provider_name, "model": self.model, "use_cache": use_cache},
+        )
         start_time = time.time()
         raw_response = self._call_api(messages, **kwargs)
         duration = time.time() - start_time
+        logger.debug(
+            "provider response",
+            extra={
+                "provider": provider_name,
+                "model": self.model,
+                "duration_seconds": round(duration, 3),
+                "cached": False,
+            },
+        )
 
         # Parse response
         response = self._parse_response(raw_response)
@@ -222,10 +253,14 @@ class BaseClient(ABC):
         if use_cache and self.cache:
             metadata = {
                 "model": self.model,
-                "provider": self._get_provider_name(),
+                "provider": provider_name,
                 "duration_seconds": duration,
             }
             self.cache.set(cache_key, raw_response, metadata)
+            logger.debug(
+                "cache store",
+                extra={"provider": provider_name, "model": self.model, "cache_key": cache_key},
+            )
 
         # Accumulate API tracking data
         if response.tracking is not None:
@@ -291,11 +326,26 @@ class BaseClient(ABC):
 
         # Generate cache key
         cache_key = self._compute_cache_key(messages, kwargs)
+        provider_name = self._get_provider_name()
+
+        logger.debug(
+            "agenerate called",
+            extra={
+                "provider": provider_name,
+                "model": self.model,
+                "use_cache": use_cache,
+                "response_format": bool(response_format),
+            },
+        )
 
         # Try cache first
         if use_cache and self.cache:
             cached_raw = self.cache.get(cache_key)
             if cached_raw:
+                logger.debug(
+                    "cache hit",
+                    extra={"provider": provider_name, "model": self.model, "cache_key": cache_key},
+                )
                 response = self._parse_response(cached_raw)
                 response.cached = True
                 # Parse structured output if response_format was provided
@@ -307,9 +357,22 @@ class BaseClient(ABC):
                 return response
 
         # Call API with timing
+        logger.debug(
+            "calling provider",
+            extra={"provider": provider_name, "model": self.model, "use_cache": use_cache},
+        )
         start_time = time.time()
         raw_response = await self._acall_api(messages, **kwargs)
         duration = time.time() - start_time
+        logger.debug(
+            "provider response",
+            extra={
+                "provider": provider_name,
+                "model": self.model,
+                "duration_seconds": round(duration, 3),
+                "cached": False,
+            },
+        )
 
         # Parse response
         response = self._parse_response(raw_response)
@@ -325,10 +388,14 @@ class BaseClient(ABC):
         if use_cache and self.cache:
             metadata = {
                 "model": self.model,
-                "provider": self._get_provider_name(),
+                "provider": provider_name,
                 "duration_seconds": duration,
             }
             self.cache.set(cache_key, raw_response, metadata)
+            logger.debug(
+                "cache store",
+                extra={"provider": provider_name, "model": self.model, "cache_key": cache_key},
+            )
 
         # Accumulate API tracking data
         if response.tracking is not None:
@@ -385,6 +452,18 @@ class BaseClient(ABC):
         result = BatchResult()
         semaphore = asyncio.Semaphore(max_concurrent)
         completed = 0
+        provider_name = self._get_provider_name()
+
+        logger.debug(
+            "batch_generate start",
+            extra={
+                "provider": provider_name,
+                "model": self.model,
+                "requests": len(messages_list),
+                "max_concurrent": max_concurrent,
+                "use_cache": use_cache,
+            },
+        )
 
         async def process_one(
             index: int, messages: list[Message]
@@ -423,6 +502,16 @@ class BaseClient(ABC):
                     result.total_gwp_kgco2eq += res.tracking.gwp_kgco2eq or 0.0
 
         result.total_duration_seconds = time.time() - batch_start
+        logger.debug(
+            "batch_generate done",
+            extra={
+                "provider": provider_name,
+                "model": self.model,
+                "duration_seconds": round(result.total_duration_seconds, 3),
+                "successes": len(result.responses),
+                "errors": len(result.errors),
+            },
+        )
         return result
 
     async def batch_generate_iter(

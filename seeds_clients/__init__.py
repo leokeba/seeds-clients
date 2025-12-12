@@ -8,13 +8,7 @@ from seeds_clients.core.exceptions import (
     SeedsClientError,
     ValidationError,
 )
-from seeds_clients.core.types import (
-    CumulativeTracking,
-    Message,
-    Response,
-    TrackingData,
-    Usage,
-)
+from seeds_clients.core.types import CumulativeTracking, Message, Response, TrackingData, Usage
 from seeds_clients.providers import (
     AnthropicClient,
     BatchResult,
@@ -24,6 +18,7 @@ from seeds_clients.providers import (
     OpenRouterClient,
     OpenRouterCostData,
 )
+from seeds_clients.utils.logging_utils import configure_logging, get_logger
 
 __version__ = "0.1.0"
 
@@ -48,4 +43,6 @@ __all__ = [
     "OpenRouterClient",
     "OpenRouterCostData",
     "ModelGardenClient",
+    "configure_logging",
+    "get_logger",
 ]

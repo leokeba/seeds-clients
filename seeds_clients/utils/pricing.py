@@ -1,13 +1,14 @@
 """Pricing information for LLM providers."""
 
 import json
-import logging
 import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from seeds_clients.utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 # Load pricing data from JSON file
 _PRICING_FILE = Path(__file__).parent / "pricing_data.json"
