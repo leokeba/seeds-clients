@@ -6,6 +6,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.cache import CacheManager
@@ -183,3 +184,28 @@ def test_base_client_uses_ttl_override(tmp_path: Path) -> None:
 
     # Cleanup to avoid resource warnings
     client.cache.close()
+
+
+def test_cache_key_is_deterministic_for_pil_images(tmp_path: Path) -> None:
+    """Cache keys should stay stable for identical PIL image content."""
+    client = _DummyClient(
+        model="dummy",
+        api_key="k",
+        cache_dir=tmp_path,
+        ttl_hours=1.5,
+        enable_tracking=False,
+    )
+
+    img1 = Image.new("RGB", (4, 4), color="red")
+    img2 = Image.new("RGB", (4, 4), color="red")
+
+    messages1 = [Message(role="user", content=[{"type": "image", "source": img1}])]
+    messages2 = [Message(role="user", content=[{"type": "image", "source": img2}])]
+
+    key1 = client._compute_cache_key(messages1, {})
+    key2 = client._compute_cache_key(messages2, {})
+
+    assert key1 == key2
+
+    if client.cache:
+        client.cache.close()

@@ -673,12 +673,35 @@ class BaseClient(ABC):
             if part.get("type") == "image":
                 # Hash image data for cache key
                 import hashlib
+                from typing import TYPE_CHECKING
+
+                if TYPE_CHECKING:
+                    from PIL import Image as PILImage  # pragma: no cover
 
                 source = part.get("source", "")
+                image_bytes: bytes | None = None
+
+                # Normalize PIL images to deterministic raw bytes so the cache
+                # key is stable across processes (avoids __repr__ memory addresses).
+                try:
+                    from PIL import Image as PILImage
+                except Exception:  # pragma: no cover - fallback when Pillow missing
+                    PILImage = None
+
                 if isinstance(source, bytes):
-                    image_hash = hashlib.sha256(source).hexdigest()[:16]
+                    image_bytes = source
+                elif PILImage is not None and isinstance(source, PILImage.Image):
+                    normalized = source.convert("RGBA")
+                    hasher = hashlib.sha256()
+                    hasher.update(normalized.mode.encode())
+                    hasher.update(str(normalized.size).encode())
+                    hasher.update(normalized.tobytes())
+                    image_hash = hasher.hexdigest()[:16]
                 else:
                     image_hash = str(source)[:100]  # Use URL/path prefix
+
+                if image_bytes is not None:
+                    image_hash = hashlib.sha256(image_bytes).hexdigest()[:16]
                 hashed.append({"type": "image", "hash": image_hash})
             else:
                 hashed.append(part)
