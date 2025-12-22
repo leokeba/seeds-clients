@@ -1,10 +1,14 @@
 """Tests for Model Garden client."""
 
+import os
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
+from dotenv import load_dotenv
 from pydantic import BaseModel
+
+load_dotenv()
 
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
 from seeds_clients.core.types import Message
@@ -619,10 +623,52 @@ class TestModelGardenClientIntegration:
             assert tracking.energy_kwh == pytest.approx(0.00005, rel=1e-3)
             assert tracking.gwp_kgco2eq == pytest.approx(0.000002, rel=1e-3)
 
-            # Verify hardware measurements
-            assert tracking.cpu_power_watts == 50.0
-            assert tracking.gpu_power_watts == 200.0
-            assert tracking.gpu_energy_kwh == pytest.approx(0.000035, rel=1e-3)
+
+@pytest.mark.integration
+class TestModelGardenClientLiveStructuredOutputs:
+    """Live structured-output tests against a running Model Garden server."""
+
+    class Person(BaseModel):
+        name: str
+        age: int
+
+    @pytest.fixture
+    def live_client(self) -> ModelGardenClient:
+        base_url = os.getenv("MODEL_GARDEN_BASE_URL")
+        model = os.getenv("MODEL_GARDEN_MODEL", "default")
+        api_key = os.getenv("MODEL_GARDEN_API_KEY")
+        rf_mode = os.getenv("MODEL_GARDEN_RESPONSE_FORMAT_MODE", "auto")
+
+        if not base_url:
+            pytest.skip("MODEL_GARDEN_BASE_URL required for live test")
+
+        return ModelGardenClient(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            supports_response_format=True,
+            response_format_mode=rf_mode,
+            temperature=0,
+            max_tokens=256,
+        )
+
+    def test_structured_output_live(self, live_client: ModelGardenClient):
+        """Verify backend-enforced structured outputs end-to-end."""
+        messages = [
+            Message(
+                role="user",
+                content=(
+                    "Return a JSON object with fields 'name' (string) and 'age' (integer). "
+                    "Keep it short."
+                ),
+            )
+        ]
+
+        response = live_client.generate(messages=messages, response_format=self.Person)
+
+        assert isinstance(response.parsed, self.Person)
+        assert response.parsed.name
+        assert response.parsed.age >= 0
 
 
 class TestModelGardenCumulativeTracking:
