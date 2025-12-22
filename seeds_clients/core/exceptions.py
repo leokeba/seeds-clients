@@ -1,5 +1,8 @@
 """Custom exceptions for seeds-clients."""
 
+import json
+from typing import Any
+
 
 class SeedsClientError(Exception):
     """Base exception for all seeds-clients errors."""
@@ -24,9 +27,25 @@ class ProviderError(SeedsClientError):
 
 
 class ValidationError(SeedsClientError):
-    """Exception raised for validation errors."""
+    """Exception raised for validation errors with optional raw payload."""
 
-    pass
+    def __init__(self, message: str, raw_response: Any | None = None) -> None:
+        self.raw_response = raw_response
+
+        if raw_response is None:
+            super().__init__(message)
+            return
+
+        preview = raw_response
+        if isinstance(preview, (dict, list)):
+            try:
+                preview = json.dumps(preview, ensure_ascii=True)
+            except Exception:
+                preview = str(preview)
+        if isinstance(preview, str) and len(preview) > 2000:
+            preview = f"{preview[:2000]}...[truncated]"
+
+        super().__init__(f"{message}\nRaw response: {preview}")
 
 
 class TrackingError(SeedsClientError):

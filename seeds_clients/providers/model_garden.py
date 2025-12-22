@@ -16,6 +16,7 @@ from contextlib import suppress
 from typing import Any
 
 import httpx
+
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
 from seeds_clients.core.types import Message, Response, TrackingData, Usage
 from seeds_clients.providers.openai import OpenAIClient
