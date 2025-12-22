@@ -189,6 +189,15 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             print(response.parsed.age)   # 30
             ```
         """
+        response_format = kwargs.get("response_format")
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
+            kwargs = kwargs.copy()
+            kwargs["_original_response_format"] = response_format
+
         # Call parent generate method (handles caching and structured output parsing)
         return super().generate(messages, use_cache=use_cache, **kwargs)
 
@@ -227,6 +236,15 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             asyncio.run(main())
             ```
         """
+        response_format = kwargs.get("response_format")
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
+            kwargs = kwargs.copy()
+            kwargs["_original_response_format"] = response_format
+
         # Call parent agenerate method (handles caching and structured output parsing)
         return await super().agenerate(messages, use_cache=use_cache, **kwargs)
 

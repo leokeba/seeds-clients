@@ -113,12 +113,9 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
             max_tokens: Maximum completion tokens.
             temperature: Sampling temperature (0-2).
             supports_response_format: Whether the server supports OpenAI-style
-                `response_format`/`json_schema`. Set to False to fall back to
-                prompt-based JSON enforcement.
-            response_format_mode: 'auto' (default) tries json_schema first and
-                falls back to json_object if the server rejects the schema;
-                set 'json_schema' to force schema, or 'json_object' to always
-                send json_object.
+                `response_format`/`json_schema`. Must be True for structured outputs.
+            response_format_mode: 'json_schema' (default, also used when 'auto')
+                or 'json_object' to request generic JSON mode. No client fallback.
             **kwargs: Additional arguments passed to OpenAIClient.
 
         Raises:
@@ -296,36 +293,6 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
 
         # Call grandparent agenerate method (BaseClient), skipping OpenAI's transform
         return await BaseClient.agenerate(self, messages, use_cache=use_cache, **kwargs)
-
-    def _add_json_instruction(
-        self, messages: list[Message], response_format: "type[BaseModel]"
-    ) -> list[Message]:
-        """
-        Add a system message instructing the model to respond in JSON format.
-
-        Args:
-            messages: Original list of messages.
-            response_format: The Pydantic model class defining the expected schema.
-
-        Returns:
-            New list of messages with JSON instruction prepended.
-        """
-        import json
-
-        schema = response_format.model_json_schema()
-        schema_str = json.dumps(schema, indent=2)
-
-        json_instruction = Message(
-            role="system",
-            content=(
-                "You must respond with valid JSON only. Do not include any text before or after "
-                "the JSON object. Do not wrap the JSON in markdown code blocks.\n\n"
-                f"Your response must conform to this JSON schema:\n{schema_str}"
-            ),
-        )
-
-        # Prepend the JSON instruction to messages
-        return [json_instruction, *messages]
 
     def _extract_json_from_response(self, content: str) -> str:
         """

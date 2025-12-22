@@ -139,6 +139,29 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         """Setup tracking (placeholder for Phase 3)."""
         pass
 
+    def _inject_structured_output(
+        self, response_format: Any, kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Normalize Pydantic response_format into OpenAI json_schema payload."""
+        if (
+            response_format is not None
+            and isinstance(response_format, type)
+            and issubclass(response_format, BaseModel)
+        ):
+            schema = self._pydantic_to_json_schema(response_format)
+            updated = kwargs.copy()
+            updated["_original_response_format"] = response_format
+            updated["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_format.__name__,
+                    "schema": schema,
+                    "strict": True,
+                },
+            }
+            return updated
+        return kwargs
+
     def generate(
         self,
         messages: list[Message],
@@ -160,46 +183,9 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
 
         Returns:
             Response object with content, usage, and optionally parsed structured data.
-
-        Example:
-            ```python
-            from pydantic import BaseModel
-
-            class Person(BaseModel):
-                name: str
-                age: int
-
-            response = client.generate(
-                messages=[Message(role="user", content="Extract: John is 30")],
-                response_format=Person
-            )
-            print(response.parsed.name)  # "John"
-            print(response.parsed.age)   # 30
-            ```
         """
-        # Extract response_format if provided
-        response_format = kwargs.get("response_format", None)
-
-        # Add structured output configuration if provided
-        if (
-            response_format is not None
-            and isinstance(response_format, type)
-            and issubclass(response_format, BaseModel)
-        ):
-            # Convert Pydantic model to OpenAI's JSON schema format
-            schema = self._pydantic_to_json_schema(response_format)
-            # Store original Pydantic class for base class parsing
-            kwargs["_original_response_format"] = response_format
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": response_format.__name__,
-                    "schema": schema,
-                    "strict": True,
-                },
-            }
-
-        # Call parent generate method (handles caching and structured output parsing)
+        response_format = kwargs.get("response_format")
+        kwargs = self._inject_structured_output(response_format, kwargs)
         return super().generate(messages, use_cache=use_cache, **kwargs)
 
     async def agenerate(
@@ -237,28 +223,8 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             asyncio.run(main())
             ```
         """
-        # Extract response_format if provided
-        response_format = kwargs.get("response_format", None)
-
-        # Add structured output configuration if provided
-        if (
-            response_format is not None
-            and isinstance(response_format, type)
-            and issubclass(response_format, BaseModel)
-        ):
-            schema = self._pydantic_to_json_schema(response_format)
-            # Store original Pydantic class for base class parsing
-            kwargs["_original_response_format"] = response_format
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": response_format.__name__,
-                    "schema": schema,
-                    "strict": True,
-                },
-            }
-
-        # Call parent agenerate method (handles caching and structured output parsing)
+        response_format = kwargs.get("response_format")
+        kwargs = self._inject_structured_output(response_format, kwargs)
         return await super().agenerate(messages, use_cache=use_cache, **kwargs)
 
     async def _acall_api(
