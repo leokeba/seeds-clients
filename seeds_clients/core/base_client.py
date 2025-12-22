@@ -34,7 +34,8 @@ class BaseClient(ABC):
         model: str,
         api_key: str | None = None,
         cache_dir: Path | str | None = None,
-        cache_ttl_hours: float | None = 24,
+        ttl_hours: float | None = 24,
+        cache_ttl_hours: float | None = None,
         enable_tracking: bool = True,
         tracking_method: str = "ecologits",
         electricity_mix_zone: str | None = None,
@@ -46,7 +47,9 @@ class BaseClient(ABC):
             model: Model identifier (e.g., 'gpt-4.1', 'claude-3-5-sonnet')
             api_key: API key for the provider (can also come from env vars)
             cache_dir: Directory for cache storage (None = no caching)
-            cache_ttl_hours: Cache time-to-live in hours (None = no expiration)
+            ttl_hours: Cache time-to-live in hours (None = no expiration)
+            cache_ttl_hours: Deprecated alias for ttl_hours; preserved for
+                             backward compatibility
             enable_tracking: Whether to enable carbon/cost tracking
             tracking_method: Tracking method ('ecologits', 'codecarbon', 'none')
             electricity_mix_zone: ISO 3166-1 alpha-3 code for electricity mix
@@ -60,10 +63,12 @@ class BaseClient(ABC):
         self.electricity_mix_zone = electricity_mix_zone or "WOR"
         self.kwargs = kwargs
 
+        effective_ttl_hours = ttl_hours if ttl_hours is not None else cache_ttl_hours
+
         # Initialize cache if directory provided
         self.cache: CacheManager | None = None
         if cache_dir:
-            self.cache = CacheManager(cache_dir, ttl_hours=cache_ttl_hours)
+            self.cache = CacheManager(cache_dir, ttl_hours=effective_ttl_hours)
 
         # Initialize cumulative tracking
         self._cumulative_tracking = CumulativeTracking()

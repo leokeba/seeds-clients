@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
 from seeds_clients.core.types import Message
@@ -336,6 +337,101 @@ class TestModelGardenClientAPICall:
 
             assert "_duration_seconds" in result
             assert result["_duration_seconds"] >= 0
+
+
+class TestModelGardenStructuredOutputs:
+    """Tests for structured output handling."""
+
+    class SampleModel(BaseModel):
+        field: str
+
+    def test_forwards_response_format_when_supported(self):
+        """Ensure response_format is sent to the API when supported."""
+        client = ModelGardenClient(
+            base_url="http://localhost:8000/v1",
+            model="test-model",
+            supports_response_format=True,
+        )
+
+        api_response = {
+            "id": "chatcmpl-schema",
+            "model": "test-model",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": '{"field":"value"}'},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 2,
+                "total_tokens": 7,
+            },
+        }
+
+        mock_response = Mock()
+        mock_response.json.return_value = api_response
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(client._http_client, "post", return_value=mock_response) as mock_post:
+            response = client.generate(
+                messages=[Message(role="user", content="Hello")],
+                response_format=self.SampleModel,
+            )
+
+            payload = mock_post.call_args.kwargs["json"]
+            assert payload["model"] == "test-model"
+            assert payload["response_format"]["type"] == "json_schema"
+            assert payload["response_format"]["json_schema"]["name"] == "SampleModel"
+
+            assert response.parsed is not None
+            assert response.parsed.field == "value"
+
+    def test_falls_back_to_prompt_when_not_supported(self):
+        """Ensure prompt-based enforcement is used when disabled."""
+        client = ModelGardenClient(
+            base_url="http://localhost:8000/v1",
+            model="test-model",
+            supports_response_format=False,
+        )
+
+        api_response = {
+            "id": "chatcmpl-prompt",
+            "model": "test-model",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": '{"field":"value"}'},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 2,
+                "total_tokens": 7,
+            },
+        }
+
+        mock_response = Mock()
+        mock_response.json.return_value = api_response
+        mock_response.raise_for_status = Mock()
+
+        with patch.object(client._http_client, "post", return_value=mock_response) as mock_post:
+            response = client.generate(
+                messages=[Message(role="user", content="Hello")],
+                response_format=self.SampleModel,
+            )
+
+            payload = mock_post.call_args.kwargs["json"]
+            assert "response_format" not in payload
+
+            messages = payload["messages"]
+            assert messages[0]["role"] == "system"
+            assert "valid JSON only" in messages[0]["content"]
+
+            assert response.parsed is not None
+            assert response.parsed.field == "value"
 
 
 class TestModelGardenClientAsync:

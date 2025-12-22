@@ -91,6 +91,7 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         ttl_hours: float | None = 24.0,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        supports_response_format: bool = True,
         **kwargs: Any,
     ) -> None:
         """
@@ -107,6 +108,9 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
             ttl_hours: Cache TTL in hours. None for no expiration.
             max_tokens: Maximum completion tokens.
             temperature: Sampling temperature (0-2).
+            supports_response_format: Whether the server supports OpenAI-style
+                `response_format`/`json_schema`. Set to False to fall back to
+                prompt-based JSON enforcement.
             **kwargs: Additional arguments passed to OpenAIClient.
 
         Raises:
@@ -124,6 +128,8 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
                 "MODEL_GARDEN_BASE_URL environment variable. "
                 "Example: http://localhost:8000/v1"
             )
+
+        self.supports_response_format = supports_response_format
 
         # Model Garden doesn't require API key by default
         # Use a placeholder if not provided to satisfy parent class
@@ -207,19 +213,19 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         # Extract response_format if provided
         response_format = kwargs.get("response_format")
 
-        # For structured outputs, we DON'T transform to json_schema format
-        # Model Garden/vLLM doesn't support it - we add a JSON instruction prompt
-        # and parse the response client-side
+        # If the server supports response_format, delegate to OpenAIClient to
+        # build the JSON schema payload so the backend enforces structure.
         if (
             response_format is not None
             and isinstance(response_format, type)
             and issubclass(response_format, BaseModel)
         ):
-            # Store original Pydantic class for base class parsing
+            if self.supports_response_format:
+                return super().generate(messages, use_cache=use_cache, **kwargs)
+
+            # Fallback path for servers that lack native structured output support
             kwargs["_original_response_format"] = response_format
-            # Remove response_format from kwargs - Model Garden doesn't support it
             kwargs.pop("response_format", None)
-            # Add JSON instruction to messages
             messages = self._add_json_instruction(messages, response_format)
 
         # Call grandparent generate method (BaseClient), skipping OpenAI's transform
@@ -250,17 +256,16 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         # Extract response_format if provided
         response_format = kwargs.get("response_format")
 
-        # For structured outputs, we DON'T transform to json_schema format
         if (
             response_format is not None
             and isinstance(response_format, type)
             and issubclass(response_format, BaseModel)
         ):
-            # Store original Pydantic class for base class parsing
+            if self.supports_response_format:
+                return await super().agenerate(messages, use_cache=use_cache, **kwargs)
+
             kwargs["_original_response_format"] = response_format
-            # Remove response_format from kwargs - Model Garden doesn't support it
             kwargs.pop("response_format", None)
-            # Add JSON instruction to messages
             messages = self._add_json_instruction(messages, response_format)
 
         # Call grandparent agenerate method (BaseClient), skipping OpenAI's transform
