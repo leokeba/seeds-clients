@@ -202,7 +202,8 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         Generate a response from the Model Garden LLM.
 
         Supports structured outputs via the response_format kwarg.
-        Requires server-side response_format support; no client-side fallback.
+        Uses server-side response_format when enabled; when explicitly disabled
+        (supports_response_format=False), falls back to prompt-based JSON enforcement.
 
         Args:
             messages: List of messages in the conversation.
@@ -226,11 +227,11 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         ):
             mode = self.response_format_mode
             if not self.supports_response_format:
-                raise ProviderError(
-                    "Model Garden server is configured without response_format support; "
-                    "enable server-side structured outputs to proceed",
-                    provider="model_garden",
-                )
+                kwargs = kwargs.copy()
+                kwargs["_original_response_format"] = response_format
+                kwargs.pop("response_format", None)
+                messages = self._add_json_instruction(messages, response_format)
+                return BaseClient.generate(self, messages, use_cache=use_cache, **kwargs)
 
             if mode == "json_object":
                 kwargs = kwargs.copy()
@@ -277,11 +278,11 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
             mode = self.response_format_mode
 
             if not self.supports_response_format:
-                raise ProviderError(
-                    "Model Garden server is configured without response_format support; "
-                    "enable server-side structured outputs to proceed",
-                    provider="model_garden",
-                )
+                kwargs = kwargs.copy()
+                kwargs["_original_response_format"] = response_format
+                kwargs.pop("response_format", None)
+                messages = self._add_json_instruction(messages, response_format)
+                return await BaseClient.agenerate(self, messages, use_cache=use_cache, **kwargs)
 
             if mode == "json_object":
                 kwargs = kwargs.copy()
@@ -293,6 +294,23 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
 
         # Call grandparent agenerate method (BaseClient), skipping OpenAI's transform
         return await BaseClient.agenerate(self, messages, use_cache=use_cache, **kwargs)
+
+    def _add_json_instruction(
+        self, messages: list[Message], response_format: "type[BaseModel]"
+    ) -> list[Message]:
+        """Prepend a JSON schema instruction for prompt-enforced outputs."""
+        import json
+
+        schema_str = json.dumps(response_format.model_json_schema(), indent=2)
+        json_instruction = Message(
+            role="system",
+            content=(
+                "You must respond with valid JSON only. Do not include any text before or after "
+                "the JSON object. Do not wrap the JSON in markdown code blocks.\n\n"
+                f"Your response must conform to this JSON schema:\n{schema_str}"
+            ),
+        )
+        return [json_instruction, *messages]
 
     def _extract_json_from_response(self, content: str) -> str:
         """
