@@ -34,7 +34,7 @@ class BaseClient(ABC):
         model: str,
         api_key: str | None = None,
         cache_dir: Path | str | None = None,
-        ttl_hours: float | None = 24,
+        cache_ttl_hours: float | None = 24,
         enable_tracking: bool = True,
         tracking_method: str = "ecologits",
         electricity_mix_zone: str | None = None,
@@ -46,8 +46,7 @@ class BaseClient(ABC):
             model: Model identifier (e.g., 'gpt-4.1', 'claude-3-5-sonnet')
             api_key: API key for the provider (can also come from env vars)
             cache_dir: Directory for cache storage (None = no caching)
-            ttl_hours: Cache time-to-live in hours (None = no expiration)
-            cache_ttl_hours: Deprecated alias for ttl_hours (if provided in kwargs)
+            cache_ttl_hours: Cache time-to-live in hours (None = no expiration)
             enable_tracking: Whether to enable carbon/cost tracking
             tracking_method: Tracking method ('ecologits', 'codecarbon', 'none')
             electricity_mix_zone: ISO 3166-1 alpha-3 code for electricity mix
@@ -59,17 +58,12 @@ class BaseClient(ABC):
         self.enable_tracking = enable_tracking
         self.tracking_method = tracking_method
         self.electricity_mix_zone = electricity_mix_zone or "WOR"
-
-        # Support deprecated cache_ttl_hours kwarg while preferring ttl_hours
-        legacy_cache_ttl = kwargs.pop("cache_ttl_hours", None)
-        effective_ttl_hours = legacy_cache_ttl if legacy_cache_ttl is not None else ttl_hours
-
         self.kwargs = kwargs
 
         # Initialize cache if directory provided
         self.cache: CacheManager | None = None
         if cache_dir:
-            self.cache = CacheManager(cache_dir, ttl_hours=effective_ttl_hours)
+            self.cache = CacheManager(cache_dir, ttl_hours=cache_ttl_hours)
 
         # Initialize cumulative tracking
         self._cumulative_tracking = CumulativeTracking()
