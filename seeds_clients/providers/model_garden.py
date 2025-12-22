@@ -377,7 +377,8 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
             )
         except (json.JSONDecodeError, ValueError) as e:
             raise ValidationError(
-                f"Failed to parse structured output: {str(e)}\nContent: {response.content[:500]}"
+                f"Failed to parse structured output: {str(e)}\nContent: {response.content[:500]}",
+                raw_response=response.raw,
             ) from e
 
     def _parse_response(self, raw: dict[str, Any]) -> Response:

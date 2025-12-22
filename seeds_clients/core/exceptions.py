@@ -1,5 +1,7 @@
 """Custom exceptions for seeds-clients."""
 
+from typing import Any
+
 
 class SeedsClientError(Exception):
     """Base exception for all seeds-clients errors."""
@@ -26,7 +28,10 @@ class ProviderError(SeedsClientError):
 class ValidationError(SeedsClientError):
     """Exception raised for validation errors."""
 
-    pass
+    def __init__(self, message: str, raw_response: dict[str, Any] | None = None) -> None:
+        """Initialize validation error with optional raw response context."""
+        self.raw_response = raw_response
+        super().__init__(message)
 
 
 class TrackingError(SeedsClientError):

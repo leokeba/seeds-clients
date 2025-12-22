@@ -587,6 +587,7 @@ class TestOpenAIStructuredOutputs:
                 client.generate(messages, response_format=Person)
 
             assert "Failed to parse structured output" in str(exc_info.value)
+            assert exc_info.value.raw_response == mock_response
 
     def test_structured_output_validation_error(self, client: OpenAIClient) -> None:
         """Test error handling for Pydantic validation errors."""
@@ -630,6 +631,7 @@ class TestOpenAIStructuredOutputs:
                 client.generate(messages, response_format=Person)
 
             assert "Failed to parse structured output" in str(exc_info.value)
+            assert exc_info.value.raw_response == mock_response
 
     def test_structured_output_caching(self, client: OpenAIClient) -> None:
         """Test that structured outputs work with caching."""

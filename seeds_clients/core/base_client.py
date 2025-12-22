@@ -753,7 +753,10 @@ class BaseClient(ABC):
                 parsed=parsed_model,
             )
         except (json.JSONDecodeError, ValueError) as e:
-            raise ValidationError(f"Failed to parse structured output: {str(e)}") from e
+            raise ValidationError(
+                f"Failed to parse structured output: {str(e)}",
+                raw_response=response.raw,
+            ) from e
 
     def _track_request(
         self,

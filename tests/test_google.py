@@ -545,6 +545,11 @@ class TestGoogleStructuredOutputs:
             client.generate(messages, response_format=Person)
 
         assert "Failed to parse structured output" in str(exc_info.value)
+        raw = exc_info.value.raw_response
+        assert isinstance(raw, dict)
+        assert raw.get("text") == "This is not JSON"
+        assert raw.get("model_version") == "gemini-2.5-flash"
+        assert raw.get("usage_metadata", {}).get("prompt_token_count") == 10
 
     def test_structured_output_caching(self, client) -> None:
         """Test that structured outputs work with caching."""

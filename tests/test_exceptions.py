@@ -29,9 +29,7 @@ class TestExceptions:
 
     def test_provider_error(self) -> None:
         """Test ProviderError with context."""
-        error = ProviderError(
-            "API call failed", provider="openai", status_code=429
-        )
+        error = ProviderError("API call failed", provider="openai", status_code=429)
         assert isinstance(error, SeedsClientError)
         assert error.provider == "openai"
         assert error.status_code == 429
@@ -48,6 +46,11 @@ class TestExceptions:
         error = ValidationError("Invalid input")
         assert isinstance(error, SeedsClientError)
         assert str(error) == "Invalid input"
+
+        # Raw response context is optional
+        raw = {"foo": "bar"}
+        error_with_raw = ValidationError("Invalid input", raw_response=raw)
+        assert error_with_raw.raw_response == raw
 
     def test_tracking_error(self) -> None:
         """Test TrackingError."""
