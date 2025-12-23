@@ -12,7 +12,6 @@ See: https://github.com/leokeba/model-garden
 
 import os
 import time
-from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -430,12 +429,14 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
             # Try to calculate cost (may not be in pricing DB for custom models)
             model_name = raw.get("model", self.model)
             cost_usd = 0.0
-            with suppress(ValueError):
+            try:
                 cost_usd = calculate_cost(
                     model=model_name,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
                 )
+            except ValueError as e:
+                logger.warning(f"Failed to calculate cost: {e}")
 
             # Extract CodeCarbon metrics from x_carbon_trace
             codecarbon_metrics = self._extract_codecarbon_metrics(raw)

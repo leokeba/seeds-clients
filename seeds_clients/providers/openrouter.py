@@ -13,9 +13,12 @@ from typing import Any
 import httpx
 
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
-from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.core.types import Message, Response, Usage
 from seeds_clients.providers.openai import OpenAIClient
+from seeds_clients.utils.logging_utils import get_logger
 from seeds_clients.utils.pricing import calculate_cost
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -209,6 +212,13 @@ class OpenRouterClient(OpenAIClient):
             return model_name
         return self.model
 
+    def _get_ecologits_model_name(self, model_name: str) -> str:
+        """Strip provider prefix from OpenRouter model for EcoLogits."""
+        if "/" in model_name:
+            _, name = model_name.split("/", 1)
+            return name
+        return model_name
+
     def _parse_response(self, raw: dict[str, Any]) -> Response:
         """
         Parse OpenRouter API response into Response object.
@@ -240,6 +250,7 @@ class OpenRouterClient(OpenAIClient):
             generation_id = raw.get("id")
 
             # Calculate cost - try fetching from OpenRouter API if enabled
+            model_name_raw = raw.get("model", self.model)
             cost_usd = 0.0
             if self.fetch_cost_data and generation_id:
                 cost_data = self._fetch_cost_data(generation_id)
@@ -247,22 +258,15 @@ class OpenRouterClient(OpenAIClient):
                     cost_usd = cost_data.total_cost
                     self._cost_data_history.append(cost_data)
             else:
-                # Fall back to local pricing calculation
-                # Try to use the actual model name from response
-                model_name = raw.get("model", self.model)
-                # For EcoLogits, we need just the model part
-                ecologits_model = self._get_ecologits_model()
-
-                # Try provider-specific pricing first
+                pricing_model = self._get_ecologits_model_name(model_name_raw)
                 try:
                     cost_usd = calculate_cost(
-                        model=ecologits_model,
+                        model=pricing_model,
                         prompt_tokens=usage.prompt_tokens,
                         completion_tokens=usage.completion_tokens,
                     )
-                except ValueError:
-                    # Model not in pricing database, cost stays 0
-                    pass
+                except ValueError as e:
+                    logger.warning(f"Failed to calculate cost: {e}")
 
             # Extract EcoLogits carbon impact data
             ecologits_impacts = raw.get("_ecologits_impacts")
@@ -271,38 +275,14 @@ class OpenRouterClient(OpenAIClient):
             # Extract full metrics from EcoLogits
             metrics = self._extract_full_ecologits_metrics(ecologits_impacts)
 
-            # Get the actual model returned by OpenRouter
-            model_name = raw.get("model", self.model)
-
             # Create tracking data
-            tracking = TrackingData(
-                # Total metrics
-                energy_kwh=metrics.energy_kwh,
-                gwp_kgco2eq=metrics.gwp_kgco2eq,
-                adpe_kgsbeq=metrics.adpe_kgsbeq,
-                pe_mj=metrics.pe_mj,
-                # Cost
-                cost_usd=cost_usd,
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens,
-                # Metadata
+            tracking = self._create_tracking_data(
+                metrics=metrics,
+                usage=usage,
                 provider="openrouter",
-                model=model_name,
-                tracking_method=metrics.tracking_method,
-                electricity_mix_zone=self.electricity_mix_zone,
+                model_name=model_name_raw,
+                cost_usd=cost_usd,
                 duration_seconds=duration_seconds,
-                # Usage phase breakdown
-                energy_usage_kwh=metrics.energy_usage_kwh,
-                gwp_usage_kgco2eq=metrics.gwp_usage_kgco2eq,
-                adpe_usage_kgsbeq=metrics.adpe_usage_kgsbeq,
-                pe_usage_mj=metrics.pe_usage_mj,
-                # Embodied phase breakdown
-                gwp_embodied_kgco2eq=metrics.gwp_embodied_kgco2eq,
-                adpe_embodied_kgsbeq=metrics.adpe_embodied_kgsbeq,
-                pe_embodied_mj=metrics.pe_embodied_mj,
-                # Status messages
-                ecologits_warnings=metrics.warnings,
-                ecologits_errors=metrics.errors,
             )
 
             # Extract optional fields
@@ -312,7 +292,7 @@ class OpenRouterClient(OpenAIClient):
             return Response(
                 content=content,
                 usage=usage,
-                model=model_name,
+                model=model_name_raw,
                 raw=raw,
                 tracking=tracking,
                 finish_reason=finish_reason,
@@ -330,171 +310,18 @@ class OpenRouterClient(OpenAIClient):
         messages: list[Message],
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """
-        Call OpenRouter API.
-
-        Extends OpenAI API call to use the correct EcoLogits provider/model.
-
-        Args:
-            messages: List of messages.
-            **kwargs: Additional API parameters.
-
-        Returns:
-            Raw API response as dict.
-        """
-        # Build request payload
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": self._format_messages(messages),
-        }
-
-        # Add optional parameters
-        if self.max_tokens is not None:
-            payload["max_tokens"] = self.max_tokens
-        if self.temperature is not None:
-            payload["temperature"] = self.temperature
-
-        # Override with kwargs
-        payload.update(kwargs)
-
-        # Track start time for duration
-        start_time = time.time()
-
-        try:
-            response = self._http_client.post(
-                "/chat/completions",
-                json=payload,
-            )
-            response.raise_for_status()
-            result: dict[str, Any] = response.json()
-
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-            result["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts using extracted provider/model
-            usage = result.get("usage", {})
-            output_tokens = usage.get("completion_tokens", 0)
-
-            # Use extracted model name for EcoLogits
-            # The provider is obtained via _get_ecologits_provider() which we override
-            ecologits_model = self._get_ecologits_model()
-
-            impacts = self._calculate_ecologits_impacts(
-                model_name=ecologits_model,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
-            )
-            if impacts:
-                result["_ecologits_impacts"] = impacts
-
-            return result
-
-        except httpx.HTTPStatusError as e:
-            error_detail = ""
-            try:
-                error_data = e.response.json()
-                error_detail = error_data.get("error", {}).get("message", "")
-            except Exception:
-                error_detail = e.response.text
-
-            raise ProviderError(
-                f"OpenRouter API error: {error_detail}",
-                provider="openrouter",
-                status_code=e.response.status_code,
-            ) from e
-
-        except httpx.RequestError as e:
-            raise ProviderError(
-                f"Request failed: {str(e)}",
-                provider="openrouter",
-            ) from e
+        """Call OpenRouter API using OpenAI payload shape."""
+        model_name = self.model
+        return super()._call_api(messages, **kwargs, model=model_name)
 
     async def _acall_api(
         self,
         messages: list[Message],
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """
-        Asynchronously call OpenRouter API.
-
-        Args:
-            messages: List of messages.
-            **kwargs: Additional API parameters.
-
-        Returns:
-            Raw API response as dict.
-        """
-        # Build request payload
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": self._format_messages(messages),
-        }
-
-        # Add optional parameters
-        if self.max_tokens is not None:
-            payload["max_tokens"] = self.max_tokens
-        if self.temperature is not None:
-            payload["temperature"] = self.temperature
-
-        # Override with kwargs
-        payload.update(kwargs)
-
-        # Track start time for duration
-        start_time = time.time()
-
-        try:
-            client = self._get_async_client()
-            response = await client.post(
-                "/chat/completions",
-                json=payload,
-            )
-            response.raise_for_status()
-            result: dict[str, Any] = response.json()
-
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-            result["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts using extracted provider/model
-            usage = result.get("usage", {})
-            output_tokens = usage.get("completion_tokens", 0)
-
-            # Use extracted model name for EcoLogits
-            # The provider is obtained via _get_ecologits_provider() which we override
-            ecologits_model = self._get_ecologits_model()
-
-            impacts = self._calculate_ecologits_impacts(
-                model_name=ecologits_model,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
-            )
-            if impacts:
-                result["_ecologits_impacts"] = impacts
-
-            return result
-
-        except httpx.HTTPStatusError as e:
-            error_detail = ""
-            try:
-                error_data = e.response.json()
-                error_detail = error_data.get("error", {}).get("message", "")
-            except Exception:
-                error_detail = e.response.text
-
-            raise ProviderError(
-                f"OpenRouter API error: {error_detail}",
-                provider="openrouter",
-                status_code=e.response.status_code,
-            ) from e
-
-        except httpx.RequestError as e:
-            raise ProviderError(
-                f"Request failed: {str(e)}",
-                provider="openrouter",
-            ) from e
+        """Async OpenRouter API call using OpenAI payload shape."""
+        model_name = self.model
+        return await super()._acall_api(messages, **kwargs, model=model_name)
 
     def _fetch_cost_data(
         self,

@@ -2,7 +2,6 @@
 
 import os
 import time
-from contextlib import suppress
 from typing import Any
 
 from PIL import Image
@@ -10,9 +9,12 @@ from pydantic import BaseModel
 
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
-from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.core.types import Message, Response, Usage
 from seeds_clients.tracking.ecologits_tracker import EcoLogitsMixin
+from seeds_clients.utils.logging_utils import get_logger
 from seeds_clients.utils.pricing import calculate_cost
+
+logger = get_logger(__name__)
 
 
 class GoogleClient(EcoLogitsMixin, BaseClient):
@@ -335,39 +337,25 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
         # Format messages for the API
         contents = self._format_messages(messages)
 
-        # Track start time for duration
         start_time = time.time()
 
         try:
-            # Make the API call
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
 
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-
-            # Convert response to dict for caching
             raw_response = self._response_to_dict(response)
-            raw_response["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts
-            usage_metadata = getattr(response, "usage_metadata", None)
-            output_tokens = 0
-            if usage_metadata:
-                output_tokens = getattr(usage_metadata, "candidates_token_count", 0) or 0
-
-            model_name = self.model
-            impacts = self._calculate_ecologits_impacts(
-                model_name=model_name,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
+            raw_response = self._apply_response_tracking(
+                raw_response,
+                start_time,
+                model_name=self.model,
+                output_tokens=getattr(
+                    getattr(response, "usage_metadata", None), "candidates_token_count", 0
+                )
+                or 0,
             )
-            if impacts:
-                raw_response["_ecologits_impacts"] = impacts
 
             return raw_response
 
@@ -416,39 +404,25 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
         # Format messages for the API
         contents = self._format_messages(messages)
 
-        # Track start time for duration
         start_time = time.time()
 
         try:
-            # Make the async API call using the .aio accessor
             response = await self._async_client.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=config,
             )
 
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-
-            # Convert response to dict for caching
             raw_response = self._response_to_dict(response)
-            raw_response["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts
-            usage_metadata = getattr(response, "usage_metadata", None)
-            output_tokens = 0
-            if usage_metadata:
-                output_tokens = getattr(usage_metadata, "candidates_token_count", 0) or 0
-
-            model_name = self.model
-            impacts = self._calculate_ecologits_impacts(
-                model_name=model_name,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
+            raw_response = self._apply_response_tracking(
+                raw_response,
+                start_time,
+                model_name=self.model,
+                output_tokens=getattr(
+                    getattr(response, "usage_metadata", None), "candidates_token_count", 0
+                )
+                or 0,
             )
-            if impacts:
-                raw_response["_ecologits_impacts"] = impacts
 
             return raw_response
 
@@ -583,17 +557,17 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
 
             # Calculate cost
             model_name = raw.get("model_version", self.model)
-            # Use the base model name for pricing lookup
             pricing_model = self._normalize_model_for_pricing(model_name)
             cost_usd = 0.0
-            with suppress(ValueError):
-                # Model not found in pricing data - cost remains 0
+            try:
                 cost_usd = calculate_cost(
                     model=pricing_model,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
                     provider="google",
                 )
+            except ValueError as e:
+                logger.warning(f"Failed to calculate cost: {e}")
 
             # Extract EcoLogits carbon impact data
             ecologits_impacts = raw.get("_ecologits_impacts")
@@ -603,34 +577,13 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             metrics = self._extract_full_ecologits_metrics(ecologits_impacts)
 
             # Create tracking data with cost and carbon metrics
-            tracking = TrackingData(
-                # Total metrics
-                energy_kwh=metrics.energy_kwh,
-                gwp_kgco2eq=metrics.gwp_kgco2eq,
-                adpe_kgsbeq=metrics.adpe_kgsbeq,
-                pe_mj=metrics.pe_mj,
-                # Cost
-                cost_usd=cost_usd,
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens,
-                # Metadata
+            tracking = self._create_tracking_data(
+                metrics=metrics,
+                usage=usage,
                 provider="google",
-                model=model_name,
-                tracking_method=metrics.tracking_method,
-                electricity_mix_zone=self.electricity_mix_zone,
+                model_name=model_name,
+                cost_usd=cost_usd,
                 duration_seconds=duration_seconds,
-                # Usage phase breakdown
-                energy_usage_kwh=metrics.energy_usage_kwh,
-                gwp_usage_kgco2eq=metrics.gwp_usage_kgco2eq,
-                adpe_usage_kgsbeq=metrics.adpe_usage_kgsbeq,
-                pe_usage_mj=metrics.pe_usage_mj,
-                # Embodied phase breakdown
-                gwp_embodied_kgco2eq=metrics.gwp_embodied_kgco2eq,
-                adpe_embodied_kgsbeq=metrics.adpe_embodied_kgsbeq,
-                pe_embodied_mj=metrics.pe_embodied_mj,
-                # Status messages
-                ecologits_warnings=metrics.warnings,
-                ecologits_errors=metrics.errors,
             )
 
             # Extract finish reason
@@ -708,9 +661,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
                     if item_type == "text":
                         parts.append(types.Part.from_text(text=item.get("text", "")))
                     elif item_type == "image":
-                        image_part = self._format_image_part(item.get("source", ""))
-                        if image_part:
-                            parts.append(image_part)
+                        parts.append(self._format_image_part(item.get("source", "")))
 
                 content = types.Content(role=role, parts=parts)
                 contents.append(content)
@@ -759,7 +710,7 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
                     with open(image_path, "rb") as f:
                         image_bytes = f.read()
                     return types.Part.from_bytes(data=image_bytes, mime_type=file_mime_type)
-                return None
+                raise ValueError(f"Unsupported image format or invalid source: {str(image)[:100]}")
 
         # PIL Image
         elif isinstance(image, Image.Image):
@@ -769,8 +720,10 @@ class GoogleClient(EcoLogitsMixin, BaseClient):
             return types.Part.from_bytes(data=image_bytes, mime_type="image/png")
 
         # Raw bytes
-        else:
+        elif isinstance(image, bytes):
             return types.Part.from_bytes(data=image, mime_type="image/jpeg")
+
+        raise ValueError(f"Unsupported image format or invalid source: {str(image)[:100]}")
 
     def close(self) -> None:
         """Close the client and clean up resources."""

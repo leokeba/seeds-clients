@@ -144,6 +144,7 @@ class TestGoogleClientGenerate:
         client = GoogleClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         # Cleanup
         if client.cache:
@@ -279,7 +280,9 @@ class TestGoogleClientErrors:
 
         from seeds_clients.providers.google import GoogleClient
 
-        return GoogleClient(api_key="test-key")
+        client = GoogleClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_api_error(self, client) -> None:
         """Test handling API errors."""
@@ -321,7 +324,9 @@ class TestGoogleClientImageFormatting:
 
         from seeds_clients.providers.google import GoogleClient
 
-        return GoogleClient(api_key="test-key")
+        client = GoogleClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_format_image_url(self, client) -> None:
         """Test formatting HTTP image URL."""
@@ -390,6 +395,7 @@ class TestGoogleStructuredOutputs:
         client = GoogleClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         if client.cache:
             client.cache.close()
@@ -618,6 +624,7 @@ class TestGoogleCostTracking:
         client = GoogleClient(api_key="test-key", cache_dir=cache_dir, model="gemini-2.5-flash")
 
         yield client
+        client.close()
 
         if client.cache:
             client.cache.close()
@@ -723,6 +730,7 @@ class TestGoogleClientAsync:
         client = GoogleClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         if client.cache:
             client.cache.close()
@@ -875,7 +883,9 @@ class TestGoogleProviderName:
 
         from seeds_clients.providers.google import GoogleClient
 
-        return GoogleClient(api_key="test-key")
+        client = GoogleClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_get_provider_name(self, client) -> None:
         """Test _get_provider_name returns correct value."""
@@ -897,7 +907,9 @@ class TestGoogleModelNormalization:
 
         from seeds_clients.providers.google import GoogleClient
 
-        return GoogleClient(api_key="test-key")
+        client = GoogleClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_normalize_versioned_model(self, client) -> None:
         """Test normalizing versioned model names."""

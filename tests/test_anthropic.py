@@ -120,6 +120,7 @@ class TestAnthropicClientGenerate:
         client = AnthropicClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         # Cleanup
         if client.cache:
@@ -260,6 +261,7 @@ class TestAnthropicClientAsync:
         client = AnthropicClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         if client.cache:
             client.cache.close()
@@ -328,7 +330,9 @@ class TestAnthropicClientErrors:
         """Create test client."""
         from seeds_clients.providers.anthropic import AnthropicClient
 
-        return AnthropicClient(api_key="test-key")
+        client = AnthropicClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_api_error(self, client, mock_anthropic) -> None:
         """Test handling API errors."""
@@ -381,7 +385,9 @@ class TestAnthropicClientImageFormatting:
         """Create test client."""
         from seeds_clients.providers.anthropic import AnthropicClient
 
-        return AnthropicClient(api_key="test-key")
+        client = AnthropicClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_format_image_url(self, client) -> None:
         """Test formatting HTTP image URL."""
@@ -450,6 +456,7 @@ class TestAnthropicStructuredOutputs:
         client = AnthropicClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         if client.cache:
             client.cache.close()
@@ -590,7 +597,9 @@ class TestAnthropicMessageFormatting:
         """Create test client."""
         from seeds_clients.providers.anthropic import AnthropicClient
 
-        return AnthropicClient(api_key="test-key")
+        client = AnthropicClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_format_text_messages(self, client) -> None:
         """Test formatting text messages."""
@@ -645,7 +654,9 @@ class TestAnthropicModelNormalization:
         """Create test client."""
         from seeds_clients.providers.anthropic import AnthropicClient
 
-        return AnthropicClient(api_key="test-key")
+        client = AnthropicClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_normalize_claude_sonnet_4(self, client) -> None:
         """Test normalizing Claude Sonnet 4 model names."""
@@ -695,6 +706,7 @@ class TestAnthropicClientTracking:
         client = AnthropicClient(api_key="test-key", cache_dir=cache_dir)
 
         yield client
+        client.close()
 
         if client.cache:
             client.cache.close()
@@ -800,7 +812,9 @@ class TestAnthropicPydanticSchemaConversion:
         """Create test client."""
         from seeds_clients.providers.anthropic import AnthropicClient
 
-        return AnthropicClient(api_key="test-key")
+        client = AnthropicClient(api_key="test-key")
+        yield client
+        client.close()
 
     def test_simple_schema_conversion(self, client) -> None:
         """Test converting simple Pydantic model to JSON schema."""

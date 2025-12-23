@@ -14,19 +14,21 @@ These are broken down into usage phase (electricity consumption during inference
 and embodied phase (resource extraction, manufacturing, transportation).
 """
 
+import time
 import warnings
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ecologits.tracers.utils import llm_impacts
 
+from seeds_clients.core.types import TrackingData, Usage
 from seeds_clients.tracking.base import CarbonMetrics, TrackingMethod
 
 
 @dataclass
 class EcoLogitsMetrics(CarbonMetrics):
     """Container for all EcoLogits impact metrics.
-    
+
     Extends CarbonMetrics with EcoLogits-specific environmental impact metrics
     including Abiotic Depletion Potential (ADPe) and Primary Energy (PE), as well
     as detailed phase breakdowns.
@@ -36,22 +38,22 @@ class EcoLogitsMetrics(CarbonMetrics):
         gwp_kgco2eq: Total Global Warming Potential in kg CO2 equivalent.
         tracking_method: The method used for tracking ("ecologits" or "none").
         duration_seconds: Request duration in seconds (inherited from CarbonMetrics).
-        
+
         # EcoLogits-specific environmental metrics
         adpe_kgsbeq: Abiotic Depletion Potential (elements) in kg Sb equivalent.
         pe_mj: Primary Energy consumption in megajoules.
-        
+
         # Usage phase breakdown (electricity consumption during inference)
         energy_usage_kwh: Energy from usage phase only.
         gwp_usage_kgco2eq: GWP from usage phase only.
         adpe_usage_kgsbeq: ADPe from usage phase only.
         pe_usage_mj: PE from usage phase only.
-        
+
         # Embodied phase breakdown (manufacturing, resource extraction)
         gwp_embodied_kgco2eq: GWP from embodied phase (manufacturing, etc.).
         adpe_embodied_kgsbeq: ADPe from embodied phase.
         pe_embodied_mj: PE from embodied phase.
-        
+
         # Status messages
         warnings: List of warning messages from EcoLogits.
         errors: List of error messages from EcoLogits.
@@ -72,31 +74,33 @@ class EcoLogitsMetrics(CarbonMetrics):
     # Status messages from EcoLogits
     warnings: list[str] | None = None
     errors: list[str] | None = None
-    
+
     def to_tracking_fields(self) -> dict[str, Any]:
         """Convert EcoLogits metrics to a dictionary for TrackingData.
-        
+
         Returns fields that can be used to populate TrackingData, including
         all EcoLogits-specific environmental impact metrics.
-        
+
         Returns:
             Dictionary with fields for TrackingData.
         """
         # Get base fields
         fields = super().to_tracking_fields()
-        
+
         # Add EcoLogits-specific fields
-        fields.update({
-            "adpe_kgsbeq": self.adpe_kgsbeq,
-            "pe_mj": self.pe_mj,
-            "adpe_usage_kgsbeq": self.adpe_usage_kgsbeq,
-            "pe_usage_mj": self.pe_usage_mj,
-            "adpe_embodied_kgsbeq": self.adpe_embodied_kgsbeq,
-            "pe_embodied_mj": self.pe_embodied_mj,
-            "ecologits_warnings": self.warnings,
-            "ecologits_errors": self.errors,
-        })
-        
+        fields.update(
+            {
+                "adpe_kgsbeq": self.adpe_kgsbeq,
+                "pe_mj": self.pe_mj,
+                "adpe_usage_kgsbeq": self.adpe_usage_kgsbeq,
+                "pe_usage_mj": self.pe_usage_mj,
+                "adpe_embodied_kgsbeq": self.adpe_embodied_kgsbeq,
+                "pe_embodied_mj": self.pe_embodied_mj,
+                "ecologits_warnings": self.warnings,
+                "ecologits_errors": self.errors,
+            }
+        )
+
         return fields
 
 
@@ -152,9 +156,7 @@ class EcoLogitsMixin:
         Raises:
             NotImplementedError: If not implemented by subclass
         """
-        raise NotImplementedError(
-            "Subclasses must implement _get_ecologits_provider()"
-        )
+        raise NotImplementedError("Subclasses must implement _get_ecologits_provider()")
 
     def _get_electricity_mix_zone(self) -> str | None:
         """
@@ -338,18 +340,10 @@ class EcoLogitsMixin:
         pe_usage_mj = None
 
         if usage:
-            energy_usage_kwh = self._extract_impact_value_optional(
-                getattr(usage, "energy", None)
-            )
-            gwp_usage_kgco2eq = self._extract_impact_value_optional(
-                getattr(usage, "gwp", None)
-            )
-            adpe_usage_kgsbeq = self._extract_impact_value_optional(
-                getattr(usage, "adpe", None)
-            )
-            pe_usage_mj = self._extract_impact_value_optional(
-                getattr(usage, "pe", None)
-            )
+            energy_usage_kwh = self._extract_impact_value_optional(getattr(usage, "energy", None))
+            gwp_usage_kgco2eq = self._extract_impact_value_optional(getattr(usage, "gwp", None))
+            adpe_usage_kgsbeq = self._extract_impact_value_optional(getattr(usage, "adpe", None))
+            pe_usage_mj = self._extract_impact_value_optional(getattr(usage, "pe", None))
 
         # Extract embodied phase values
         embodied = getattr(impacts, "embodied", None)
@@ -364,9 +358,7 @@ class EcoLogitsMixin:
             adpe_embodied_kgsbeq = self._extract_impact_value_optional(
                 getattr(embodied, "adpe", None)
             )
-            pe_embodied_mj = self._extract_impact_value_optional(
-                getattr(embodied, "pe", None)
-            )
+            pe_embodied_mj = self._extract_impact_value_optional(getattr(embodied, "pe", None))
 
         # Extract warnings and errors
         warning_list = None
@@ -401,13 +393,13 @@ class EcoLogitsMixin:
         **kwargs: Any,
     ) -> EcoLogitsMetrics | None:
         """Extract carbon metrics using EcoLogits calculations.
-        
+
         This method implements the CarbonTrackingMixin protocol, providing
         a unified interface for carbon tracking.
-        
+
         For EcoLogits, the metrics are calculated (not extracted from response),
         so this method requires additional kwargs:
-        
+
         Args:
             raw_response: Raw API response dict. Used to extract model name and
                          output token count if not provided in kwargs.
@@ -416,11 +408,11 @@ class EcoLogitsMixin:
                 - output_tokens: Output token count (falls back to raw_response["usage"]["completion_tokens"])
                 - request_latency: Request duration in seconds (falls back to raw_response["_duration_seconds"])
                 - electricity_mix_zone: Optional electricity mix zone code
-        
+
         Returns:
             EcoLogitsMetrics with calculated environmental impacts, or None
             if calculation fails or output_tokens is 0.
-        
+
         Example:
             ```python
             metrics = mixin.extract_carbon_metrics(
@@ -436,14 +428,16 @@ class EcoLogitsMixin:
         """
         # Extract parameters from kwargs or raw_response
         model_name = kwargs.get("model_name") or raw_response.get("model", "")
-        
+
         usage = raw_response.get("usage", {})
         output_tokens = kwargs.get("output_tokens") or usage.get("completion_tokens", 0)
-        
-        request_latency = kwargs.get("request_latency") or raw_response.get("_duration_seconds", 0.0)
-        
+
+        request_latency = kwargs.get("request_latency") or raw_response.get(
+            "_duration_seconds", 0.0
+        )
+
         electricity_mix_zone = kwargs.get("electricity_mix_zone")
-        
+
         # Calculate impacts using EcoLogits
         impacts = self._calculate_ecologits_impacts(
             model_name=model_name,
@@ -451,14 +445,81 @@ class EcoLogitsMixin:
             request_latency=request_latency,
             electricity_mix_zone=electricity_mix_zone,
         )
-        
+
         if not impacts:
             return None
-        
+
         # Extract full metrics
         metrics = self._extract_full_ecologits_metrics(impacts)
-        
+
         # Add duration to metrics
         metrics.duration_seconds = request_latency
-        
+
         return metrics
+
+    def _create_tracking_data(
+        self,
+        metrics: EcoLogitsMetrics,
+        usage: Usage,
+        provider: str,
+        model_name: str,
+        cost_usd: float,
+        duration_seconds: float,
+    ) -> TrackingData:
+        """Build TrackingData from metrics and usage."""
+        return TrackingData(
+            # Total metrics
+            energy_kwh=metrics.energy_kwh,
+            gwp_kgco2eq=metrics.gwp_kgco2eq,
+            adpe_kgsbeq=metrics.adpe_kgsbeq,
+            pe_mj=metrics.pe_mj,
+            # Cost & tokens
+            cost_usd=cost_usd,
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            # Metadata
+            provider=provider,
+            model=model_name,
+            tracking_method=metrics.tracking_method,
+            electricity_mix_zone=self._get_electricity_mix_zone(),
+            duration_seconds=duration_seconds,
+            # Usage phase
+            energy_usage_kwh=metrics.energy_usage_kwh,
+            gwp_usage_kgco2eq=metrics.gwp_usage_kgco2eq,
+            adpe_usage_kgsbeq=metrics.adpe_usage_kgsbeq,
+            pe_usage_mj=metrics.pe_usage_mj,
+            # Embodied phase
+            gwp_embodied_kgco2eq=metrics.gwp_embodied_kgco2eq,
+            adpe_embodied_kgsbeq=metrics.adpe_embodied_kgsbeq,
+            pe_embodied_mj=metrics.pe_embodied_mj,
+            # Status
+            ecologits_warnings=metrics.warnings,
+            ecologits_errors=metrics.errors,
+        )
+
+    def _apply_response_tracking(
+        self,
+        result: dict[str, Any],
+        start_time: float,
+        model_name: str,
+        output_tokens: int | None = None,
+    ) -> dict[str, Any]:
+        """Inject duration and EcoLogits impacts into raw response."""
+        duration_seconds = time.time() - start_time
+        result["_duration_seconds"] = duration_seconds
+
+        # Determine tokens if not provided
+        if output_tokens is None:
+            usage = result.get("usage", {})
+            output_tokens = usage.get("completion_tokens", 0)
+
+        impacts = self._calculate_ecologits_impacts(
+            model_name=model_name,
+            output_tokens=output_tokens or 0,
+            request_latency=duration_seconds,
+            electricity_mix_zone=self._get_electricity_mix_zone(),
+        )
+        if impacts:
+            result["_ecologits_impacts"] = impacts
+
+        return result

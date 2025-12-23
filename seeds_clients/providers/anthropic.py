@@ -6,7 +6,6 @@ import json
 import mimetypes
 import os
 import time
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +14,12 @@ from pydantic import BaseModel
 
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
-from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.core.types import Message, Response, Usage
 from seeds_clients.tracking.ecologits_tracker import EcoLogitsMixin
+from seeds_clients.utils.logging_utils import get_logger
 from seeds_clients.utils.pricing import calculate_cost
+
+logger = get_logger(__name__)
 
 
 class AnthropicClient(EcoLogitsMixin, BaseClient):
@@ -373,31 +375,18 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
         # Build request parameters
         params = self._build_request_params(messages, response_format=response_format, **kwargs)
 
-        # Track start time for duration
         start_time = time.time()
 
         try:
-            # Make the API call
             response = self._client.messages.create(**params)
 
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-
-            # Convert response to dict for caching
             raw_response = self._response_to_dict(response, response_format)
-            raw_response["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts
-            output_tokens = response.usage.output_tokens if response.usage else 0
-
-            impacts = self._calculate_ecologits_impacts(
+            raw_response = self._apply_response_tracking(
+                raw_response,
+                start_time,
                 model_name=self.model,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
+                output_tokens=response.usage.output_tokens if response.usage else 0,
             )
-            if impacts:
-                raw_response["_ecologits_impacts"] = impacts
 
             return raw_response
 
@@ -448,31 +437,18 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
         # Build request parameters
         params = self._build_request_params(messages, response_format=response_format, **kwargs)
 
-        # Track start time for duration
         start_time = time.time()
 
         try:
-            # Make the async API call
             response = await self._async_client.messages.create(**params)
 
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-
-            # Convert response to dict for caching
             raw_response = self._response_to_dict(response, response_format)
-            raw_response["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts
-            output_tokens = response.usage.output_tokens if response.usage else 0
-
-            impacts = self._calculate_ecologits_impacts(
+            raw_response = self._apply_response_tracking(
+                raw_response,
+                start_time,
                 model_name=self.model,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
+                output_tokens=response.usage.output_tokens if response.usage else 0,
             )
-            if impacts:
-                raw_response["_ecologits_impacts"] = impacts
 
             return raw_response
 
@@ -601,50 +577,27 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
             model_name = raw.get("model", self.model)
             pricing_model = self._normalize_model_for_pricing(model_name)
             cost_usd = 0.0
-            with suppress(ValueError):
+            try:
                 cost_usd = calculate_cost(
                     model=pricing_model,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
                     provider="anthropic",
                 )
+            except ValueError as e:
+                logger.warning(f"Failed to calculate cost: {e}")
 
-            # Extract EcoLogits carbon impact data
             ecologits_impacts = raw.get("_ecologits_impacts")
             duration_seconds = raw.get("_duration_seconds", 0.0)
-
-            # Extract full metrics from EcoLogits
             metrics = self._extract_full_ecologits_metrics(ecologits_impacts)
 
-            # Create tracking data with cost and carbon metrics
-            tracking = TrackingData(
-                # Total metrics
-                energy_kwh=metrics.energy_kwh,
-                gwp_kgco2eq=metrics.gwp_kgco2eq,
-                adpe_kgsbeq=metrics.adpe_kgsbeq,
-                pe_mj=metrics.pe_mj,
-                # Cost
-                cost_usd=cost_usd,
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens,
-                # Metadata
+            tracking = self._create_tracking_data(
+                metrics=metrics,
+                usage=usage,
                 provider="anthropic",
-                model=model_name,
-                tracking_method=metrics.tracking_method,
-                electricity_mix_zone=self.electricity_mix_zone,
+                model_name=model_name,
+                cost_usd=cost_usd,
                 duration_seconds=duration_seconds,
-                # Usage phase breakdown
-                energy_usage_kwh=metrics.energy_usage_kwh,
-                gwp_usage_kgco2eq=metrics.gwp_usage_kgco2eq,
-                adpe_usage_kgsbeq=metrics.adpe_usage_kgsbeq,
-                pe_usage_mj=metrics.pe_usage_mj,
-                # Embodied phase breakdown
-                gwp_embodied_kgco2eq=metrics.gwp_embodied_kgco2eq,
-                adpe_embodied_kgsbeq=metrics.adpe_embodied_kgsbeq,
-                pe_embodied_mj=metrics.pe_embodied_mj,
-                # Status messages
-                ecologits_warnings=metrics.warnings,
-                ecologits_errors=metrics.errors,
             )
 
             # Extract finish reason (stop_reason in Anthropic)
@@ -743,8 +696,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
                         )
                     elif item_type == "image":
                         image_block = self._format_image_part(item.get("source", ""))
-                        if image_block:
-                            content_blocks.append(image_block)
+                        content_blocks.append(image_block)
 
                 message_dict["content"] = content_blocks
 
@@ -787,7 +739,9 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
                         },
                     }
                 except (ValueError, IndexError):
-                    return None
+                    raise ValueError(
+                        f"Unsupported image format or invalid source: {str(image)[:100]}"
+                    )
             else:
                 # Assume file path
                 image_path = Path(image)
@@ -803,7 +757,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
                             "data": base64.b64encode(image_bytes).decode("utf-8"),
                         },
                     }
-                return None
+                raise ValueError(f"Unsupported image format or invalid source: {str(image)[:100]}")
 
         # PIL Image
         elif isinstance(image, Image.Image):
@@ -830,7 +784,7 @@ class AnthropicClient(EcoLogitsMixin, BaseClient):
                 },
             }
 
-        return None
+        raise ValueError(f"Unsupported image format or invalid source: {str(image)[:100]}")
 
     def close(self) -> None:
         """Close the client and clean up resources."""

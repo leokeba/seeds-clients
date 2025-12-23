@@ -87,7 +87,9 @@ class TestModelGardenClientParseResponse:
     @pytest.fixture
     def client(self):
         """Create a Model Garden client instance."""
-        return ModelGardenClient(base_url="http://localhost:8000/v1")
+        client = ModelGardenClient(base_url="http://localhost:8000/v1")
+        yield client
+        client.close()
 
     @pytest.fixture
     def sample_response_with_codecarbon(self):
@@ -240,12 +242,14 @@ class TestModelGardenClientAPICall:
     @pytest.fixture
     def client(self):
         """Create a Model Garden client instance."""
-        return ModelGardenClient(
+        client = ModelGardenClient(
             base_url="http://localhost:8000/v1",
             model="test-model",
             max_tokens=100,
             temperature=0.5,
         )
+        yield client
+        client.close()
 
     @pytest.fixture
     def sample_api_response(self):
@@ -444,7 +448,9 @@ class TestModelGardenClientAsync:
     @pytest.fixture
     def client(self):
         """Create a Model Garden client instance."""
-        return ModelGardenClient(base_url="http://localhost:8000/v1")
+        client = ModelGardenClient(base_url="http://localhost:8000/v1")
+        yield client
+        client.close()
 
     @pytest.fixture
     def sample_api_response(self):
@@ -499,7 +505,9 @@ class TestModelGardenClientCarbonStats:
     @pytest.fixture
     def client(self):
         """Create a Model Garden client instance."""
-        return ModelGardenClient(base_url="http://localhost:8000/v1")
+        client = ModelGardenClient(base_url="http://localhost:8000/v1")
+        yield client
+        client.close()
 
     def test_get_carbon_stats_success(self, client):
         """Test getting carbon stats successfully."""
@@ -563,9 +571,11 @@ class TestModelGardenClientIntegration:
     @pytest.fixture
     def client(self, tmp_path):
         """Create a Model Garden client instance."""
-        return ModelGardenClient(
+        client = ModelGardenClient(
             base_url="http://localhost:8000/v1", cache_dir=str(tmp_path / "cache")
         )
+        yield client
+        client.close()
 
     def test_generate_full_flow(self, client):
         """Test full generate flow with mocked API."""
@@ -642,7 +652,7 @@ class TestModelGardenClientLiveStructuredOutputs:
         if not base_url:
             pytest.skip("MODEL_GARDEN_BASE_URL required for live test")
 
-        return ModelGardenClient(
+        client = ModelGardenClient(
             base_url=base_url,
             api_key=api_key,
             model=model,
@@ -651,6 +661,8 @@ class TestModelGardenClientLiveStructuredOutputs:
             temperature=0,
             max_tokens=256,
         )
+        yield client
+        client.close()
 
     def test_structured_output_live(self, live_client: ModelGardenClient):
         """Verify backend-enforced structured outputs end-to-end."""
@@ -677,7 +689,9 @@ class TestModelGardenCumulativeTracking:
     @pytest.fixture
     def client(self):
         """Create a Model Garden client instance."""
-        return ModelGardenClient(base_url="http://localhost:8000/v1")
+        client = ModelGardenClient(base_url="http://localhost:8000/v1")
+        yield client
+        client.close()
 
     @pytest.fixture
     def sample_response_with_codecarbon(self):

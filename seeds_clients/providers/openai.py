@@ -3,7 +3,6 @@
 import asyncio
 import os
 import time
-from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -12,9 +11,12 @@ from pydantic import BaseModel
 
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.exceptions import ConfigurationError, ProviderError
-from seeds_clients.core.types import Message, Response, TrackingData, Usage
+from seeds_clients.core.types import Message, Response, Usage
 from seeds_clients.tracking.ecologits_tracker import EcoLogitsMixin
+from seeds_clients.utils.logging_utils import get_logger
 from seeds_clients.utils.pricing import calculate_cost
+
+logger = get_logger(__name__)
 
 
 class OpenAIClient(EcoLogitsMixin, BaseClient):
@@ -135,6 +137,10 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         """Return provider name for EcoLogits tracking."""
         return "openai"
 
+    def _get_ecologits_model_name(self, model_name: str) -> str:
+        """Hook for subclasses to adjust model name used for EcoLogits."""
+        return model_name
+
     def _setup_tracking(self) -> None:
         """Setup tracking (placeholder for Phase 3)."""
         pass
@@ -232,35 +238,18 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         messages: list[Message],
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """
-        Asynchronously call OpenAI API.
-
-        Args:
-            messages: List of messages.
-            **kwargs: Additional API parameters.
-
-        Returns:
-            Raw API response as dict.
-
-        Raises:
-            ProviderError: If API call fails.
-        """
-        # Build request payload
+        """Asynchronously call OpenAI API."""
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": self._format_messages(messages),
         }
 
-        # Add optional parameters
         if self.max_tokens is not None:
             payload["max_tokens"] = self.max_tokens
         if self.temperature is not None:
             payload["temperature"] = self.temperature
 
-        # Override with kwargs
         payload.update(kwargs)
-
-        # Track start time for duration
         start_time = time.time()
 
         try:
@@ -271,26 +260,8 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             )
             response.raise_for_status()
             result: dict[str, Any] = response.json()
-
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-            result["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts
-            usage = result.get("usage", {})
-            output_tokens = usage.get("completion_tokens", 0)
-            model_name = result.get("model", self.model)
-
-            impacts = self._calculate_ecologits_impacts(
-                model_name=model_name,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
-            )
-            if impacts:
-                result["_ecologits_impacts"] = impacts
-
-            return result
+            model_name = self._get_ecologits_model_name(result.get("model", self.model))
+            return self._apply_response_tracking(result, start_time, model_name=model_name)
 
         except httpx.HTTPStatusError as e:
             error_detail = ""
@@ -471,7 +442,6 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         # Override with kwargs
         payload.update(kwargs)
 
-        # Track start time for duration
         start_time = time.time()
 
         try:
@@ -481,26 +451,8 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             )
             response.raise_for_status()
             result: dict[str, Any] = response.json()
-
-            # Calculate request duration
-            duration_seconds = time.time() - start_time
-            result["_duration_seconds"] = duration_seconds
-
-            # Calculate EcoLogits carbon impacts
-            usage = result.get("usage", {})
-            output_tokens = usage.get("completion_tokens", 0)
-            model_name = result.get("model", self.model)
-
-            impacts = self._calculate_ecologits_impacts(
-                model_name=model_name,
-                output_tokens=output_tokens,
-                request_latency=duration_seconds,
-                electricity_mix_zone=self.electricity_mix_zone,
-            )
-            if impacts:
-                result["_ecologits_impacts"] = impacts
-
-            return result
+            model_name = self._get_ecologits_model_name(result.get("model", self.model))
+            return self._apply_response_tracking(result, start_time, model_name=model_name)
 
         except httpx.HTTPStatusError as e:
             error_detail = ""
@@ -552,50 +504,26 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             # Calculate cost
             model_name = raw.get("model", self.model)
             cost_usd = 0.0
-            with suppress(ValueError):
-                # Model not found in pricing data - cost remains 0
+            try:
                 cost_usd = calculate_cost(
                     model=model_name,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
                 )
+            except ValueError as e:
+                logger.warning(f"Failed to calculate cost: {e}")
 
-            # Extract EcoLogits carbon impact data
             ecologits_impacts = raw.get("_ecologits_impacts")
             duration_seconds = raw.get("_duration_seconds", 0.0)
-
-            # Extract full metrics from EcoLogits
             metrics = self._extract_full_ecologits_metrics(ecologits_impacts)
 
-            # Create tracking data with cost and carbon metrics
-            tracking = TrackingData(
-                # Total metrics
-                energy_kwh=metrics.energy_kwh,
-                gwp_kgco2eq=metrics.gwp_kgco2eq,
-                adpe_kgsbeq=metrics.adpe_kgsbeq,
-                pe_mj=metrics.pe_mj,
-                # Cost
-                cost_usd=cost_usd,
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens,
-                # Metadata
+            tracking = self._create_tracking_data(
+                metrics=metrics,
+                usage=usage,
                 provider="openai",
-                model=model_name,
-                tracking_method=metrics.tracking_method,
-                electricity_mix_zone=self.electricity_mix_zone,
+                model_name=model_name,
+                cost_usd=cost_usd,
                 duration_seconds=duration_seconds,
-                # Usage phase breakdown
-                energy_usage_kwh=metrics.energy_usage_kwh,
-                gwp_usage_kgco2eq=metrics.gwp_usage_kgco2eq,
-                adpe_usage_kgsbeq=metrics.adpe_usage_kgsbeq,
-                pe_usage_mj=metrics.pe_usage_mj,
-                # Embodied phase breakdown
-                gwp_embodied_kgco2eq=metrics.gwp_embodied_kgco2eq,
-                adpe_embodied_kgsbeq=metrics.adpe_embodied_kgsbeq,
-                pe_embodied_mj=metrics.pe_embodied_mj,
-                # Status messages
-                ecologits_warnings=metrics.warnings,
-                ecologits_errors=metrics.errors,
             )
 
             # Extract optional fields
@@ -684,13 +612,16 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
 
         # File path
         if isinstance(image, str):
+            # If already a data URL, pass through
+            if image.startswith("data:"):
+                return image
+
             image_path = Path(image)
             if image_path.exists():
                 with open(image_path, "rb") as f:
                     image_bytes = f.read()
             else:
-                # Assume it's a data URL
-                return image
+                raise ValueError(f"Image path not found: {image}")
 
         # PIL Image
         elif isinstance(image, Image.Image):

@@ -26,8 +26,7 @@ class TestClientCumulativeTracking:
         """Create test client with caching."""
         client = OpenAIClient(api_key="test-key", cache_dir=cache_dir)
         yield client
-        if client.cache:
-            client.cache.close()
+        client.close()
 
     @pytest.fixture
     def mock_response(self) -> dict[str, Any]:
@@ -229,8 +228,7 @@ class TestCumulativeTrackingWithAsyncClient:
         """Create test client with caching."""
         client = OpenAIClient(api_key="test-key", cache_dir=cache_dir)
         yield client
-        if client.cache:
-            client.cache.close()
+        client.close()
 
     @pytest.fixture
     def mock_response(self) -> dict[str, Any]:
@@ -566,8 +564,7 @@ class TestCumulativeTrackingUsageEmbodiedBreakdown:
         """Create test client with caching."""
         client = OpenAIClient(api_key="test-key", cache_dir=cache_dir)
         yield client
-        if client.cache:
-            client.cache.close()
+        client.close()
 
     @pytest.fixture
     def mock_response(self) -> dict[str, Any]:

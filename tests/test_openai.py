@@ -74,6 +74,7 @@ class TestOpenAIClientGenerate:
         yield client
 
         # Cleanup
+        client.close()
         if client.cache:
             client.cache.close()
         shutil.rmtree(cache_dir, ignore_errors=True)
@@ -184,7 +185,8 @@ class TestOpenAIClientGenerate:
             assert response2.content == response1.content
 
             # Clear cache for cleanup
-            if client.cache:
+        client.close()
+        if client.cache:
                 client.cache.clear()
 
     def test_generate_multimodal_message(self, client: OpenAIClient, mock_response: dict) -> None:
@@ -220,10 +222,11 @@ class TestOpenAIClientErrors:
     """Test OpenAI client error handling."""
 
     @pytest.fixture
-    def client(self) -> OpenAIClient:
+    def client(self) -> Generator[OpenAIClient, None, None]:
         """Create test client."""
-        return OpenAIClient(api_key="test-key")
-
+        client = OpenAIClient(api_key="test-key")
+        yield client
+        client.close()
     def test_api_error_with_json_response(self, client: OpenAIClient) -> None:
         """Test handling API error with JSON error message."""
         import httpx
@@ -314,10 +317,11 @@ class TestOpenAIClientImageFormatting:
     """Test image formatting for multimodal messages."""
 
     @pytest.fixture
-    def client(self) -> OpenAIClient:
+    def client(self) -> Generator[OpenAIClient, None, None]:
         """Create test client."""
-        return OpenAIClient(api_key="test-key")
-
+        client = OpenAIClient(api_key="test-key")
+        yield client
+        client.close()
     def test_format_image_url(self, client: OpenAIClient) -> None:
         """Test formatting image URL."""
         url = "https://example.com/image.jpg"
@@ -373,6 +377,7 @@ class TestOpenAIStructuredOutputs:
 
         yield client
 
+        client.close()
         if client.cache:
             client.cache.close()
         shutil.rmtree(cache_dir, ignore_errors=True)
@@ -819,6 +824,7 @@ class TestOpenAICostTracking:
 
         yield client
 
+        client.close()
         if client.cache:
             client.cache.close()
         shutil.rmtree(cache_dir, ignore_errors=True)
