@@ -126,7 +126,7 @@ class CacheManager:
         """
         try:
             volume = self.cache.volume()
-            cache_len = len(self.cache)
+            cache_len = self.cache.__len__()
             return {
                 "size_bytes": volume,
                 "size_mb": volume / (1024 * 1024),
@@ -155,10 +155,15 @@ class CacheManager:
 
     def close(self) -> None:
         """Close the cache."""
+        if getattr(self, "_closed", False):
+            return
+
         try:
             self.cache.close()
         except Exception as e:
             raise CacheError(f"Failed to close cache: {e}") from e
+        finally:
+            self._closed = True
 
     def __enter__(self) -> "CacheManager":
         """Context manager entry."""
@@ -167,3 +172,11 @@ class CacheManager:
     def __exit__(self, *args: Any) -> None:
         """Context manager exit."""
         self.close()
+
+    def __del__(self) -> None:
+        """Ensure cache resources are released when garbage collected."""
+        try:
+            self.close()
+        except Exception:
+            # Avoid raising during interpreter shutdown
+            pass

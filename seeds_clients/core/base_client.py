@@ -685,6 +685,7 @@ class BaseClient(ABC):
 
                 source = part.get("source", "")
                 image_bytes: bytes | None = None
+                image_hash = ""
 
                 # Normalize PIL images to deterministic raw bytes so the cache
                 # key is stable across processes (avoids __repr__ memory addresses).
@@ -702,8 +703,10 @@ class BaseClient(ABC):
                     hasher.update(str(normalized.size).encode())
                     hasher.update(normalized.tobytes())
                     image_hash = hasher.hexdigest()[:16]
+                elif isinstance(source, str):
+                    image_hash = source[:100]
                 else:
-                    image_hash = str(source)[:100]  # Use URL/path prefix
+                    image_hash = repr(source)[:100]
 
                 if image_bytes is not None:
                     image_hash = hashlib.sha256(image_bytes).hexdigest()[:16]
@@ -941,3 +944,11 @@ class BaseClient(ABC):
     async def __aexit__(self, *args: Any) -> None:
         """Async context manager exit."""
         await self.aclose()
+
+    def __del__(self) -> None:
+        """Ensure underlying resources are cleaned up on GC."""
+        try:
+            self.close()
+        except Exception:
+            # Avoid raising during interpreter shutdown
+            pass

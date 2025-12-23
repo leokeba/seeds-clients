@@ -383,16 +383,21 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
         return schema
 
     def __del__(self) -> None:
-        """Clean up HTTP clients."""
-        if hasattr(self, "_http_client"):
-            self._http_client.close()
-        # Note: Async client should be closed via aclose() in async context
+        """Clean up HTTP clients and cache on GC."""
+        try:
+            self.close()
+        except Exception:
+            # Avoid raising during interpreter shutdown
+            pass
 
     async def aclose(self) -> None:
         """Asynchronously close the client and clean up resources."""
         if self._async_http_client is not None:
             await self._async_http_client.aclose()
             self._async_http_client = None
+        if hasattr(self, "_http_client"):
+            self._http_client.close()
+        super().close()
 
     def close(self) -> None:
         """Close the client and clean up resources."""
@@ -408,6 +413,7 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
                 # No running event loop, try sync close if possible
                 pass
             self._async_http_client = None
+        super().close()
 
     def _call_api(
         self,
