@@ -1,10 +1,12 @@
 """Tests for pricing module."""
 
+import importlib
 import warnings
 from datetime import datetime
 
 import pytest
 
+from seeds_clients.utils import pricing
 from seeds_clients.utils.pricing import (
     OPENAI_PRICING,
     calculate_cost,
@@ -187,11 +189,47 @@ class TestPricingDataManagement:
         assert isinstance(_PRICING_DATA["openai"], dict)
 
         # Each model should have input and output pricing
-        for model, pricing in _PRICING_DATA["openai"].items():
-            assert "input" in pricing, f"Model {model} missing 'input' pricing"
-            assert "output" in pricing, f"Model {model} missing 'output' pricing"
-            assert isinstance(pricing["input"], (int, float))
-            assert isinstance(pricing["output"], (int, float))
+        for model, pricing_entry in _PRICING_DATA["openai"].items():
+            assert "input" in pricing_entry, f"Model {model} missing 'input' pricing"
+            assert "output" in pricing_entry, f"Model {model} missing 'output' pricing"
+            assert isinstance(pricing_entry["input"], (int, float))
+            assert isinstance(pricing_entry["output"], (int, float))
+
+    def test_reload_pricing_data_reloads_and_warns_on_outdated(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Reload should refresh globals and surface warnings when outdated."""
+        # Force outdated metadata
+        monkeypatch.setattr(
+            pricing,
+            "_PRICING_DATA_RAW",
+            {
+                "_metadata": {
+                    "last_updated": "2000-01-01",
+                    "update_frequency_days": 1,
+                    "source": "test-source",
+                }
+            },
+        )
+        monkeypatch.setattr(pricing, "_extract_metadata", pricing._extract_metadata)
+        monkeypatch.setattr(
+            pricing,
+            "_extract_providers",
+            lambda data: {"openai": {"model": {"input": 1.0, "output": 1.0}}},
+        )
+        monkeypatch.setattr(pricing, "_load_pricing_data", lambda: pricing._PRICING_DATA_RAW)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            pricing.reload_pricing_data()
+            pricing.warn_if_update_needed()
+            assert pricing._METADATA["last_updated"] == "2000-01-01"
+            assert pricing.OPENAI_PRICING["model"]["input"] == 1.0
+            assert pricing._PRICING_DATA["openai"]["model"]["output"] == 1.0
+            assert any(issubclass(wi.category, UserWarning) for wi in w)
+
+        # reload original module state to avoid leaking
+        importlib.reload(pricing)
 
 
 class TestPricingMetadata:

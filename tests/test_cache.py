@@ -10,6 +10,7 @@ from PIL import Image
 
 from seeds_clients.core.base_client import BaseClient
 from seeds_clients.core.cache import CacheManager
+from seeds_clients.core.exceptions import CacheError
 from seeds_clients.core.types import Message, Response, Usage
 
 
@@ -140,6 +141,74 @@ class TestCacheManager:
 
         # Metadata is stored but not returned with data
         assert retrieved == data
+
+    def test_init_failure_raises_cacheerror(
+        self, monkeypatch: pytest.MonkeyPatch, cache_dir: Path
+    ) -> None:
+        """Initialization errors are wrapped in CacheError."""
+
+        class Boom(Exception):
+            pass
+
+        def boom_cache(*args: object, **kwargs: object) -> None:
+            raise Boom("fail")
+
+        monkeypatch.setattr("seeds_clients.core.cache.Cache", boom_cache)
+
+        with pytest.raises(CacheError, match="Failed to initialize cache:.*fail"):
+            CacheManager(cache_dir)
+
+    def test_cache_operations_wrap_errors(
+        self, cache: CacheManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Getter/setter operations wrap underlying exceptions."""
+
+        def boom_get(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom-get")
+
+        def boom_set(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom-set")
+
+        def boom_delete(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom-del")
+
+        def boom_clear(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom-clear")
+
+        monkeypatch.setattr(cache.cache, "get", boom_get)
+        with pytest.raises(CacheError, match="Failed to read from cache: boom-get"):
+            cache.get("k")
+
+        monkeypatch.setattr(cache.cache, "set", boom_set)
+        with pytest.raises(CacheError, match="Failed to write to cache: boom-set"):
+            cache.set("k", {})
+
+        monkeypatch.setattr(cache.cache, "delete", boom_delete)
+        with pytest.raises(CacheError, match="Failed to delete from cache: boom-del"):
+            cache.delete("k")
+
+        monkeypatch.setattr(cache.cache, "clear", boom_clear)
+        with pytest.raises(CacheError, match="Failed to clear cache: boom-clear"):
+            cache.clear()
+
+    def test_stats_and_close_wrap_errors(
+        self, cache: CacheManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Stats and close also surface wrapped errors."""
+
+        def boom_volume(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom-vol")
+
+        def boom_close(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom-close")
+
+        monkeypatch.setattr(cache.cache, "volume", boom_volume)
+        with pytest.raises(CacheError, match="Failed to get cache stats: boom-vol"):
+            cache.stats()
+
+        monkeypatch.setattr(cache.cache, "close", boom_close)
+        with pytest.raises(CacheError, match="Failed to close cache: boom-close"):
+            cache.close()
 
 
 class _DummyClient(BaseClient):
