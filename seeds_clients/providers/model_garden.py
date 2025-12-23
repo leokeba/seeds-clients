@@ -294,44 +294,6 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
         # Call grandparent agenerate method (BaseClient), skipping OpenAI's transform
         return await BaseClient.agenerate(self, messages, use_cache=use_cache, **kwargs)
 
-    def _ensure_openai_chat_format(self, raw: Any) -> Any:
-        """Coerce legacy/text responses into OpenAI chat-completion shape."""
-        if not isinstance(raw, dict):
-            return raw
-
-        if "choices" in raw and isinstance(raw.get("choices"), list):
-            return raw
-
-        text = raw.get("text")
-        if text is None:
-            return raw
-
-        usage = raw.get("usage", {}) if isinstance(raw.get("usage"), dict) else {}
-        timestamp = int(time.time())
-        wrapped = {
-            "id": raw.get("id") or f"chatcmpl-local-{timestamp}",
-            "object": raw.get("object", "chat.completion"),
-            "created": raw.get("created", timestamp),
-            "model": raw.get("model", self.model),
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": text},
-                    "finish_reason": raw.get("finish_reason", "stop"),
-                }
-            ],
-            "usage": {
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "total_tokens": usage.get("total_tokens", 0),
-            },
-        }
-
-        if "x_carbon_trace" in raw:
-            wrapped["x_carbon_trace"] = raw["x_carbon_trace"]
-
-        return wrapped
-
     def _add_json_instruction(
         self, messages: list[Message], response_format: "type[BaseModel]"
     ) -> list[Message]:
@@ -451,8 +413,6 @@ class ModelGardenClient(CodeCarbonMixin, OpenAIClient):  # type: ignore[misc]
             ProviderError: If response format is invalid.
         """
         try:
-            raw = self._ensure_openai_chat_format(raw)
-
             # Extract content from first choice
             choice = raw["choices"][0]
             message = choice["message"]
