@@ -1,6 +1,7 @@
 """Tests for OpenAI client."""
 
 import json
+import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -187,7 +188,7 @@ class TestOpenAIClientGenerate:
             # Clear cache for cleanup
         client.close()
         if client.cache:
-                client.cache.clear()
+            client.cache.clear()
 
     def test_generate_multimodal_message(self, client: OpenAIClient, mock_response: dict) -> None:
         """Test generating with multimodal (text + image) message."""
@@ -227,6 +228,7 @@ class TestOpenAIClientErrors:
         client = OpenAIClient(api_key="test-key")
         yield client
         client.close()
+
     def test_api_error_with_json_response(self, client: OpenAIClient) -> None:
         """Test handling API error with JSON error message."""
         import httpx
@@ -322,6 +324,7 @@ class TestOpenAIClientImageFormatting:
         client = OpenAIClient(api_key="test-key")
         yield client
         client.close()
+
     def test_format_image_url(self, client: OpenAIClient) -> None:
         """Test formatting image URL."""
         url = "https://example.com/image.jpg"
@@ -813,6 +816,27 @@ class TestOpenAIStructuredOutputs:
         assert "required" in line_item_schema
         assert set(line_item_schema["required"]) == {"description", "quantity", "price"}
 
+    def test_json_schema_drops_required_without_properties(
+        self, client: OpenAIClient
+    ) -> None:
+        """Required should not exist where properties are absent (allOf cases)."""
+
+        raw_schema: dict[str, Any] = {
+            "allOf": [
+                {
+                    "type": "object",
+                    "properties": {"kind": {"type": "string"}},
+                }
+            ],
+            "required": ["args"],
+        }
+
+        patched = client._patch_schema_for_openai_strict(raw_schema)
+
+        assert "required" not in patched
+        assert "allOf" in patched
+        assert set(patched["allOf"][0]["required"]) == {"kind"}
+
     def test_json_schema_deeply_nested_has_additional_properties_false(
         self, client: OpenAIClient
     ) -> None:
@@ -843,6 +867,53 @@ class TestOpenAIStructuredOutputs:
         items_schema = order_schema["properties"]["items"]
         item_schema = items_schema.get("items", {})
         assert item_schema.get("additionalProperties") is False
+
+
+class TestOpenAIStructuredOutputsIntegration:
+    """Integration tests for OpenAI structured outputs."""
+
+    @pytest.mark.integration
+    def test_structured_output_next_action_payload_real_api(self) -> None:
+        """Test real OpenAI API with NextActionPayload response_format."""
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set")
+
+        class PlanStepPayload(BaseModel):
+            action: str
+            args: dict[str, Any]
+
+        class NextActionPayload(BaseModel):
+            objective: str | None = None
+            finish: bool = False
+            reasoning: str | None = None
+            step: PlanStepPayload | None = None
+
+        client = OpenAIClient(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4.1-mini")
+        try:
+            response = client.generate(
+                messages=[
+                    Message(
+                        role="system",
+                        content=(
+                            "Return JSON matching the schema. "
+                            "Use a concise objective, finish=false, reasoning string, and a step with action and args."
+                        ),
+                    ),
+                    Message(role="user", content="Plan the next action for creating a todo list."),
+                ],
+                response_format=NextActionPayload,
+                temperature=0,
+            )
+
+            assert response.parsed is not None
+            assert isinstance(response.parsed, NextActionPayload)
+            assert response.parsed.finish in (True, False)
+            if response.parsed.step is not None:
+                assert isinstance(response.parsed.step, PlanStepPayload)
+                assert isinstance(response.parsed.step.action, str)
+                assert isinstance(response.parsed.step.args, dict)
+        finally:
+            client.close()
 
 
 class TestOpenAICostTracking:

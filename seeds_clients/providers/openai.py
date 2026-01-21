@@ -337,10 +337,17 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
                 # Patch 1: Enforce additionalProperties: false (required by OpenAI strict mode)
                 schema["additionalProperties"] = False
 
+                # Ensure properties exists for object schemas (even if empty)
+                if "properties" not in schema:
+                    schema["properties"] = {}
+
                 # Patch 2: Ensure required includes ALL property keys
                 if "properties" in schema:
                     all_props = list(schema["properties"].keys())
                     schema["required"] = all_props
+            if "required" in schema and "properties" not in schema:
+                # If no properties exist at this level, remove mismatched required
+                schema.pop("required", None)
 
             # Recursively process all values
             for key, value in schema.items():
