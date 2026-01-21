@@ -334,9 +334,8 @@ class OpenAIClient(EcoLogitsMixin, BaseClient):
             is_object = schema.get("type") == "object" or "properties" in schema
 
             if is_object:
-                # Patch 1: Add additionalProperties: false
-                if "additionalProperties" not in schema:
-                    schema["additionalProperties"] = False
+                # Patch 1: Enforce additionalProperties: false (required by OpenAI strict mode)
+                schema["additionalProperties"] = False
 
                 # Patch 2: Ensure required includes ALL property keys
                 if "properties" in schema:

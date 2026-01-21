@@ -550,6 +550,41 @@ class TestOpenAIStructuredOutputs:
             assert response.parsed.price == 29.99
             assert response.parsed.in_stock is True
 
+    def test_structured_output_enforces_no_additional_properties(
+        self, client: OpenAIClient
+    ) -> None:
+        """Ensure OpenAI strict schema sets additionalProperties=false everywhere."""
+
+        class ToolCall(BaseModel):
+            name: str
+            args: dict[str, Any]
+
+        class StepA(BaseModel):
+            kind: str
+            tool: ToolCall
+
+        class StepB(BaseModel):
+            kind: str
+            value: str
+
+        class Payload(BaseModel):
+            step: StepA | StepB
+
+        schema = client._pydantic_to_json_schema(Payload)
+
+        def assert_no_additional_properties(node: Any) -> None:
+            if isinstance(node, dict):
+                is_object = node.get("type") == "object" or "properties" in node
+                if is_object:
+                    assert node.get("additionalProperties") is False
+                for value in node.values():
+                    assert_no_additional_properties(value)
+            elif isinstance(node, list):
+                for item in node:
+                    assert_no_additional_properties(item)
+
+        assert_no_additional_properties(schema)
+
     def test_structured_output_invalid_json(self, client: OpenAIClient) -> None:
         """Test error handling for invalid JSON in structured output."""
 
